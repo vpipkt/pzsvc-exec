@@ -1,0 +1,4 @@
+{
+"cliProg":"./bf-cmdline",
+"cliCmd":"process"
+}
