@@ -26,9 +26,9 @@ import (
 	"bytes"
 )
 
-type configType struct {
-	cliProg string
-	cliCmd string
+type ConfigType struct {
+	CliProg string
+	CliCmd string
 }
 
 func main() {
@@ -37,8 +37,13 @@ func main() {
 	// ReadFile returns the contents of the file as a byte buffer.
 	configBuf, _ := ioutil.ReadFile(os.Args[1])
 
-	var configObj configType
+//fmt.Println(string(configBuf))
+
+	var configObj ConfigType
 	json.Unmarshal(configBuf, &configObj)
+
+//fmt.Println(configObj.CliProg)
+//fmt.Println(configObj.CliCmd)
 
 	//- check that config file data is complete.  Checks other dependency requirements (if any)
 	//- register on Pz
@@ -58,15 +63,15 @@ func main() {
 				}
 
 
-				//TODO: this should be removed once it is no longer necessary for debugging.  Reflection attack vuln
-				fmt.Fprintf(w, "param string: %s\n", paramString)
+//TODO: this should be removed once it is no longer necessary for debugging.  Reflection attack vuln
+//fmt.Fprintf(w, "param string: %s\n", paramString)
 
 
  
 				var b bytes.Buffer
 				var clc exec.Cmd
-				clc.Path = "./bf-dummycmd"
-				clc.Args = []string{"./bf-dummycmd", "process", paramString}
+				clc.Path = configObj.CliProg
+				clc.Args = []string{configObj.CliProg, configObj.CliCmd, paramString}
 				clc.Stdout = &b
 				clc.Stderr = os.Stderr
 
