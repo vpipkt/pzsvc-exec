@@ -1,5 +1,5 @@
 applications:
-- name: pzsvc-gexec
+- name: pzsvc-exec
   host: pzsvc-exec
   command: ./pzsvc-exec examplecfg.txt
   domain: stage.geointservices.io
