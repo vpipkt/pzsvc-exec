@@ -1,0 +1,8 @@
+applications:
+- name: pzsvc-gexec
+  host: pzsvc-exec
+  command: ./pzsvc-exec examplecfg.txt
+  domain: stage.geointservices.io
+  memory: 1G
+  instances: 1
+  timeout: 180
