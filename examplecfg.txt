@@ -1,4 +1,4 @@
 {
-"cliProg":"./bf-cmdline",
-"cliCmd":"process"
+	"CliProg":"./pzsvc-exec",
+	"CliCmd":"./examplecfg.txt"
 }
