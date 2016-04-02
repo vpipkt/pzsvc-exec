@@ -1,4 +1,4 @@
-#! /bin/bash
+#a /bin/bash
 
 APP=pzsvc-exec
-EXT=tar.gz
+EXT=bin

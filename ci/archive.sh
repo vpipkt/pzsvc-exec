@@ -10,7 +10,5 @@ mkdir -p $GOPATH
 source $root/ci/vars.sh
 
 go get -v github.com/venicegeo/$APP/...
-#go install -v github.com/venicegeo/$APP/...
-cp $GOPATH/src/github.com/venicegeo/$APP/examplecfg.txt $GOPATH/bin/
-
-tar -czf $APP.$EXT -C $GOPATH/bin .
+src=$GOPATH/bin/pzsvc-exec
+mv $src $root/$APP.$EXT

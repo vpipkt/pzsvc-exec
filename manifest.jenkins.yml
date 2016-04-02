@@ -1,7 +1,7 @@
 applications:
 - name: pzsvc-exec
   host: pzsvc-exec
-  command: ./pzsvc-exec examplecfg.txt
+  command: ./pzsvc-exec.bin examplecfg.txt
   buildpack: binary_buildpack
   domain: stage.geointservices.io
   memory: 1G
