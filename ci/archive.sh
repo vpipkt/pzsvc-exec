@@ -9,6 +9,8 @@ mkdir -p $GOPATH
 lsb_release -a
 source $root/ci/vars.sh
 
-go get -v github.com/venicegeo/$APP/...
-src=$GOPATH/bin/pzsvc-exec
-mv $src $root/$APP.$EXT
+go get -v github.com/venicegeo/pzsvc-exec/...
+go install -v github.com/venicegeo/pzsvc-exec/bf-dummycmd
+cp $GOPATH/src/github.com/venicegeo/pzsvc-exec/examplecfg.txt $GOPATH/bin/
+
+tar -czfn $APP.$EXT -C $GOPATH/bin .
