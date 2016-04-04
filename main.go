@@ -15,15 +15,15 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"io/ioutil"
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
 	"os/exec"
-	//"strconv"
-	"net/http"
-	"bytes"
+	"strings"
 )
 
 type ConfigType struct {
@@ -35,15 +35,21 @@ func main() {
 
 	// first argument after the program name should be the path to the config file.
 	// ReadFile returns the contents of the file as a byte buffer.
-	configBuf, _ := ioutil.ReadFile(os.Args[1])
+	configBuf, err := ioutil.ReadFile(os.Args[1])
+	if err != nil {
+		fmt.Println("error:", err)
+	}
 
-//fmt.Println(string(configBuf))
+fmt.Println(string(configBuf))
 
 	var configObj ConfigType
-	json.Unmarshal(configBuf, &configObj)
+	err = json.Unmarshal(configBuf, &configObj)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
 
-//fmt.Println(configObj.CliProg)
-//fmt.Println(configObj.CliCmd)
+fmt.Println(configObj.CliProg)
+fmt.Println(configObj.CliCmd)
 
 	//- check that config file data is complete.  Checks other dependency requirements (if any)
 	//- register on Pz
@@ -62,20 +68,23 @@ func main() {
 					paramString = r.FormValue("param")
 				}
 
+	//split paramstring on spaces, feed into later args.
+
 
 //TODO: this should be removed once it is no longer necessary for debugging.  Reflection attack vuln
 //fmt.Fprintf(w, "param string: %s\n", paramString)
 
 
- 
+				paramSlice := strings.Split(paramString, " ")
 				var b bytes.Buffer
 				var clc exec.Cmd
 				clc.Path = configObj.CliProg
-				clc.Args = []string{configObj.CliProg, configObj.CliCmd, paramString}
+				clc.Args = []string{configObj.CliProg, configObj.CliCmd}
+				clc.Args = append(clc.Args, paramSlice...)
 				clc.Stdout = &b
 				clc.Stderr = os.Stderr
 
-				err := clc.Run()
+				err = clc.Run()
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				} else {
@@ -89,6 +98,9 @@ func main() {
 		}
 	})
 
+// might want to update Port number at some point - possibly to os.Getenve(“PORT”),
+// possibly to some other defined port - talk with the Pz folks over what their
+// system is
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
