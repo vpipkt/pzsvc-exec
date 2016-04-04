@@ -15,15 +15,15 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"io/ioutil"
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
 	"os/exec"
-	//"strconv"
-	"net/http"
-	"bytes"
+	"strings"
 )
 
 type ConfigType struct {
@@ -68,16 +68,19 @@ fmt.Println(configObj.CliCmd)
 					paramString = r.FormValue("param")
 				}
 
+	//split paramstring on spaces, feed into later args.
+
 
 //TODO: this should be removed once it is no longer necessary for debugging.  Reflection attack vuln
 //fmt.Fprintf(w, "param string: %s\n", paramString)
 
 
- 
+				paramSlice := strings.Split(paramString, " ")
 				var b bytes.Buffer
 				var clc exec.Cmd
 				clc.Path = configObj.CliProg
-				clc.Args = []string{configObj.CliProg, configObj.CliCmd, paramString}
+				clc.Args = []string{configObj.CliProg, configObj.CliCmd}
+				clc.Args = append(clc.Args, paramSlice...)
 				clc.Stdout = &b
 				clc.Stderr = os.Stderr
 
