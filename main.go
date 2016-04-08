@@ -77,7 +77,7 @@ func main() {
 					outTiffStr = r.FormValue("outTiffs")
 					outTxtStr = r.FormValue("outTxts")
 				}
-fmt.Printf("params acquired\n")
+fmt.Println("params acquired")
 				cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
 				cmdParamSlice := splitOrNil(cmdParam, " ")
 				cmdSlice := append(cmdConfigSlice, cmdParamSlice...)
@@ -85,16 +85,14 @@ fmt.Printf("params acquired\n")
 				inFileSlice := splitOrNil(inFileStr, ",")
 				outTiffSlice := splitOrNil(outTiffStr, ",")
 				outTxtSlice := splitOrNil(outTxtStr, ",")
-fmt.Printf("params sliced\n")
+fmt.Println("params sliced")
 				for _, inFile := range inFileSlice {
-fmt.Printf("\ndownloading file: %s\n", inFile)
+fmt.Println("downloading file: ", inFile)
 					err := pzsvc.Download(inFile, configObj.PzFileAddr)
 					if err != nil {
-fmt.Printf(err.Error())
 						fmt.Fprintf(w, err.Error())
 					}
 				}
-fmt.Printf("downloaded\n")
 
 				if len(cmdSlice) == 0 {
 					fmt.Fprintf(w, `No cmd specified in config file.  Please provide "cmd" param.`)
@@ -110,30 +108,26 @@ fmt.Printf("downloaded\n")
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				} else {
-					fmt.Fprintf(w, b.String())
+					fmt.Fprintln(w, b.String())
 				}
-fmt.Printf("executed\n")
 				for _, outTiff := range outTiffSlice {
 					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzJobAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
-						fmt.Fprintf(w, dataId)
+						fmt.Fprintln(w, dataId)
 					}
 				}
-fmt.Printf("Tiff sent\n")
+fmt.Println("Tiff sent")
 				for _, outTxt := range outTxtSlice {
-fmt.Fprintf(w, "sending Txt\n")
 					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzJobAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
-						fmt.Fprintf(w, dataId)
 					} else {
-						fmt.Fprintf(w, dataId)
+						fmt.Fprintln(w, dataId)
 					}
-fmt.Fprintf(w, "\ndone sending Txt\n")
 				}
-fmt.Printf("Txt sent\n")				
+fmt.Println("Txt sent")				
 			}
 			case "/help":
 				help(w)

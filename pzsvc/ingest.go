@@ -37,7 +37,7 @@ type IngJsonResp struct {
 }
 
 type StatusJsonResult struct {
-	ApiKey string
+	Type string
 	DataId string
 }
 
@@ -48,16 +48,50 @@ type StatusJsonResp struct {
 	Status string
 }
 
+func submitMultipart (bodyStr, jobAddress, upload string) (*http.Response, error){
+	
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	err := writer.WriteField("body", bodyStr)
+	if err != nil { return nil, err }
+
+	if upload != "" {
+		file, err := os.Open(fmt.Sprintf(`./%s`, upload))
+		if err != nil { return nil, err }
+
+		defer file.Close()
+
+		part, err := writer.CreateFormFile("file", upload)
+		if err != nil { return nil, err }
+
+		_, err = io.Copy(part, file)
+		if err != nil { return nil, err }
+	}
+
+	err = writer.Close()
+	if err != nil { return nil, err }
+
+	fileReq, err := http.NewRequest("POST", jobAddress, body)
+	if err != nil { return nil, err }
+	
+	fileReq.Header.Add("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	resp, err := client.Do(fileReq)
+	if err != nil { return nil, err }
+
+	return resp, err
+}
+
+
 func Download(dataId, address string) error {
 
-	jsonStr := fmt.Sprintf(`body: { "userName": "my-api-key-38n987", "dataId": "%s"}`, dataId)
-	jsonBuf := bytes.NewBufferString(jsonStr)
+	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "dataId": "%s"}`, dataId)
 
-	resp, err := http.Post(address, "application/json", jsonBuf)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+	resp, err := submitMultipart( jsonStr, address, "")
+	if resp != nil { defer resp.Body.Close() }
+	if err != nil { return err }
 
 	contDisp := resp.Header.Get("Content-Disposition")
 	_, params, err := mime.ParseMediaType(contDisp)
@@ -75,91 +109,54 @@ func Download(dataId, address string) error {
 }
 
 
-
 func getStatus (jobId, jobAddress string) (string, error) {
 
 	var respObj StatusJsonResp
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "get", "jobId": "%s" } }`, jobId)
-	jsonBuf := bytes.NewBufferString(jsonStr)
 
 	lastErr := errors.New("Never completed.")
 
-	for i:=0; i<600; i++{
-		resp, err := http.Post(jobAddress, "application/json", jsonBuf)
+	for i:=0; i<100; i++{
+
+		resp, err := submitMultipart(jsonStr, jobAddress, "")
+		if resp != nil { defer resp.Body.Close() }
+		if err != nil { return "", err }
+
+		respBuf := &bytes.Buffer{}
+
+		_, err = respBuf.ReadFrom(resp.Body)
 		if err != nil {
 			return "", err
 		}
 
-		var respJson []byte
-		_, err = io.ReadFull (resp.Body, respJson)
+fmt.Println(respBuf.String())
+
+		err = json.Unmarshal(respBuf.Bytes(), &respObj)
 		if err != nil {
 			return "", err
 		}
 
-		err = json.Unmarshal(respJson, &respObj)
-		if err != nil {
-			return "", err
-		}
-
-		if respObj.Status == "Complete" {
+		if respObj.Status == "Success" {
 			lastErr = nil
 			break
 		}
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	return respObj.Result.DataId, lastErr	
 }
 
 
-
 func ingestMultipart (bodyStr, jobAddress, filename string) (string, error) {
 
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
 
-	err := writer.WriteField("body", "{}")
+	resp, err := submitMultipart(bodyStr, jobAddress, filename)
 	if err != nil {
 		return "", err
 	}
 
-	if filename != "" {
-		file, err := os.Open(fmt.Sprintf(`./%s`, filename))
-		if err != nil {
-			return "", err
-		}
 
-		defer file.Close()
-
-		part, err := writer.CreateFormFile("file", filename)
-		if err != nil {
-			return "", err
-		}
-
-		_, err = io.Copy(part, file)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	err = writer.Close()
-	if err != nil {
-		return "", err
-	}
-
-	fileReq, err := http.NewRequest("POST", jobAddress, body)
-	if err != nil {
-		return "", err
-	}
-	
-	fileReq.Header.Add("Content-Type", writer.FormDataContentType())
-
-	client := &http.Client{}
-	resp, err := client.Do(fileReq)
-	if err != nil {
-		return "", err
-	}
 	respBuf := &bytes.Buffer{}
 
 	_, err = respBuf.ReadFrom(resp.Body)
@@ -167,7 +164,7 @@ func ingestMultipart (bodyStr, jobAddress, filename string) (string, error) {
 		return "", err
 	}
 
-fmt.Println(string(respBuf.Bytes()))
+fmt.Println(respBuf.String())
 
 	var respObj IngJsonResp
 	err = json.Unmarshal(respBuf.Bytes(), &respObj)
