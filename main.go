@@ -24,32 +24,30 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/venicegeo/pzsvc-exec/pzsvc"
 )
 
 type ConfigType struct {
-	CliProg string
 	CliCmd string
+	PzJobAddr string
+	PzFileAddr string
 }
 
 func main() {
 
-	// first argument after the program name should be the path to the config file.
+	// first argument after the base call should be the path to the config file.
 	// ReadFile returns the contents of the file as a byte buffer.
 	configBuf, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
 		fmt.Println("error:", err)
 	}
 
-fmt.Println(string(configBuf))
-
 	var configObj ConfigType
 	err = json.Unmarshal(configBuf, &configObj)
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-
-fmt.Println(configObj.CliProg)
-fmt.Println(configObj.CliCmd)
 
 	//- check that config file data is complete.  Checks other dependency requirements (if any)
 	//- register on Pz
@@ -61,26 +59,50 @@ fmt.Println(configObj.CliCmd)
 				fmt.Fprintf(w, "hello.")
 			case "/execute": {
 
-				var paramString string
+				var cmdParam string
+				var inFileStr string
+				var outTiffStr string
+				var outTxtStr string
+
+// might be time to start looking into that "help" thing.
+
 				if r.Method == "GET" {
-					paramString = r.URL.Query().Get("param")
+					cmdParam = r.URL.Query().Get("cmd")
+					inFileStr = r.URL.Query().Get("inFiles")
+					outTiffStr = r.URL.Query().Get("outTiffs")
+					outTxtStr = r.URL.Query().Get("outTxts")
 				} else {
-					paramString = r.FormValue("param")
+					cmdParam = r.FormValue("cmd")
+					inFileStr = r.FormValue("inFiles")
+					outTiffStr = r.FormValue("outTiffs")
+					outTxtStr = r.FormValue("outTxts")
 				}
+fmt.Printf("params acquired\n")
+				cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
+				cmdParamSlice := splitOrNil(cmdParam, " ")
+				cmdSlice := append(cmdConfigSlice, cmdParamSlice...)
 
-	//split paramstring on spaces, feed into later args.
+				inFileSlice := splitOrNil(inFileStr, ",")
+				outTiffSlice := splitOrNil(outTiffStr, ",")
+				outTxtSlice := splitOrNil(outTxtStr, ",")
+fmt.Printf("params sliced\n")
+				for _, inFile := range inFileSlice {
+fmt.Printf("\ndownloading file: %s\n", inFile)
+					err := pzsvc.Download(inFile, configObj.PzFileAddr)
+					if err != nil {
+fmt.Printf(err.Error())
+						fmt.Fprintf(w, err.Error())
+					}
+				}
+fmt.Printf("downloaded\n")
 
+				if len(cmdSlice) == 0 {
+					fmt.Fprintf(w, `No cmd specified in config file.  Please provide "cmd" param.`)
+					break
+				}
+				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
 
-//TODO: this should be removed once it is no longer necessary for debugging.  Reflection attack vuln
-//fmt.Fprintf(w, "param string: %s\n", paramString)
-
-
-				paramSlice := strings.Split(paramString, " ")
 				var b bytes.Buffer
-				var clc exec.Cmd
-				clc.Path = configObj.CliProg
-				clc.Args = []string{configObj.CliProg, configObj.CliCmd}
-				clc.Args = append(clc.Args, paramSlice...)
 				clc.Stdout = &b
 				clc.Stderr = os.Stderr
 
@@ -90,6 +112,28 @@ fmt.Println(configObj.CliCmd)
 				} else {
 					fmt.Fprintf(w, b.String())
 				}
+fmt.Printf("executed\n")
+				for _, outTiff := range outTiffSlice {
+					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzJobAddr)
+					if err != nil {
+						fmt.Fprintf(w, err.Error())
+					} else {
+						fmt.Fprintf(w, dataId)
+					}
+				}
+fmt.Printf("Tiff sent\n")
+				for _, outTxt := range outTxtSlice {
+fmt.Fprintf(w, "sending Txt\n")
+					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzJobAddr)
+					if err != nil {
+						fmt.Fprintf(w, err.Error())
+						fmt.Fprintf(w, dataId)
+					} else {
+						fmt.Fprintf(w, dataId)
+					}
+fmt.Fprintf(w, "\ndone sending Txt\n")
+				}
+fmt.Printf("Txt sent\n")				
 			}
 			case "/help":
 				help(w)
@@ -103,6 +147,15 @@ fmt.Println(configObj.CliCmd)
 // system is
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
+
+func splitOrNil(inString, knife string) []string {
+fmt.Printf("SplitOrNull: \"%s\", split by \"%s\".\n", inString, knife)
+	if inString == "" {
+		return nil
+	}
+	return strings.Split(inString, knife)
+}
+
 
 func other(w http.ResponseWriter) {
 	fmt.Fprintf(w, "Command undefined.  Try help?\n")
