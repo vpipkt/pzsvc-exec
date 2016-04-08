@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/venicegeo/pzsvc-exec/pzsvc"
@@ -63,6 +64,7 @@ func main() {
 				var inFileStr string
 				var outTiffStr string
 				var outTxtStr string
+				var usePz string
 
 // might be time to start looking into that "help" thing.
 
@@ -71,13 +73,15 @@ func main() {
 					inFileStr = r.URL.Query().Get("inFiles")
 					outTiffStr = r.URL.Query().Get("outTiffs")
 					outTxtStr = r.URL.Query().Get("outTxts")
+					usePz = r.URL.Query().Get("pz")
 				} else {
 					cmdParam = r.FormValue("cmd")
 					inFileStr = r.FormValue("inFiles")
 					outTiffStr = r.FormValue("outTiffs")
 					outTxtStr = r.FormValue("outTxts")
+					usePz = r.FormValue("pz")
 				}
-fmt.Println("params acquired")
+
 				cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
 				cmdParamSlice := splitOrNil(cmdParam, " ")
 				cmdSlice := append(cmdConfigSlice, cmdParamSlice...)
@@ -85,12 +89,16 @@ fmt.Println("params acquired")
 				inFileSlice := splitOrNil(inFileStr, ",")
 				outTiffSlice := splitOrNil(outTiffStr, ",")
 				outTxtSlice := splitOrNil(outTxtStr, ",")
-fmt.Println("params sliced")
+
+				output := ""
+
 				for _, inFile := range inFileSlice {
-fmt.Println("downloading file: ", inFile)
-					err := pzsvc.Download(inFile, configObj.PzFileAddr)
+
+					fName, err := pzsvc.Download(inFile, configObj.PzFileAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+					} else {
+						output += ("input: " + fName + "\n")
 					}
 				}
 
@@ -107,27 +115,38 @@ fmt.Println("downloading file: ", inFile)
 				err = clc.Run()
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
-				} else {
-					fmt.Fprintln(w, b.String())
 				}
+
+
+
 				for _, outTiff := range outTiffSlice {
 					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzJobAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
-						fmt.Fprintln(w, dataId)
+						output += ("Tiff output: " + dataId + "\n")
 					}
 				}
-fmt.Println("Tiff sent")
+
 				for _, outTxt := range outTxtSlice {
 					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzJobAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
-						fmt.Fprintln(w, dataId)
+						output += ("Txt output: " + dataId + "\n")
 					}
 				}
-fmt.Println("Txt sent")				
+
+				output += "/********************/\n"
+				output += b.String()
+
+				if usePz != "" {
+					output = strconv.QuoteToASCII(output)
+					output = fmt.Sprintf ( `{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, output )
+				}
+
+				fmt.Fprintf(w, output)
+				
 			}
 			case "/help":
 				help(w)

@@ -85,13 +85,13 @@ func submitMultipart (bodyStr, jobAddress, upload string) (*http.Response, error
 }
 
 
-func Download(dataId, address string) error {
+func Download(dataId, address string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "dataId": "%s"}`, dataId)
 
 	resp, err := submitMultipart( jsonStr, address, "")
 	if resp != nil { defer resp.Body.Close() }
-	if err != nil { return err }
+	if err != nil { return "", err }
 
 	contDisp := resp.Header.Get("Content-Disposition")
 	_, params, err := mime.ParseMediaType(contDisp)
@@ -100,12 +100,12 @@ func Download(dataId, address string) error {
 	filepath := fmt.Sprintf(`./%s`, filename)
 
 	out, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
+	if err != nil { return "", err }
+
 	defer out.Close()
 	io.Copy(out, resp.Body)
-	return nil
+
+	return filename, nil
 }
 
 
