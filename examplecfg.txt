@@ -1,4 +1,5 @@
 {
-	"CliProg":"./pzsvc-exec",
-	"CliCmd":"./examplecfg.txt"
+	"CliCmd":""
+	"PzJobAddr":"https://pz-gateway.stage.geointservices.io/job"
+	"PzFileAddr":"https://pz-gateway.stage.geointservices.io/file"
 }
