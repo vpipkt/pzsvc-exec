@@ -64,6 +64,7 @@ func main() {
 				var inFileStr string
 				var outTiffStr string
 				var outTxtStr string
+				var outGeoJStr string
 				var usePz string
 
 // might be time to start looking into that "help" thing.
@@ -73,12 +74,14 @@ func main() {
 					inFileStr = r.URL.Query().Get("inFiles")
 					outTiffStr = r.URL.Query().Get("outTiffs")
 					outTxtStr = r.URL.Query().Get("outTxts")
+					outGeoJStr = r.URL.Query().Get("outGeoJson")
 					usePz = r.URL.Query().Get("pz")
 				} else {
 					cmdParam = r.FormValue("cmd")
 					inFileStr = r.FormValue("inFiles")
 					outTiffStr = r.FormValue("outTiffs")
 					outTxtStr = r.FormValue("outTxts")
+					outGeoJStr = r.FormValue("outGeoJson")
 					usePz = r.FormValue("pz")
 				}
 
@@ -89,6 +92,7 @@ func main() {
 				inFileSlice := splitOrNil(inFileStr, ",")
 				outTiffSlice := splitOrNil(outTiffStr, ",")
 				outTxtSlice := splitOrNil(outTxtStr, ",")
+				outGeoJSlice := splitOrNil(outGeoJStr, ",")
 
 				output := ""
 
@@ -134,6 +138,15 @@ func main() {
 						fmt.Fprintf(w, err.Error())
 					} else {
 						output += ("Txt output: " + dataId + "\n")
+					}
+				}
+
+				for _, outGeoJ := range outGeoJSlice {
+					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzJobAddr)
+					if err != nil {
+						fmt.Fprintf(w, err.Error())
+					} else {
+						output += ("GeoJson output: " + dataId + "\n")
 					}
 				}
 
