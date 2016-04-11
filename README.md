@@ -33,12 +33,26 @@ PzFileAddr: For use with a Piazza instance.  This is the file download endpoint 
 
 Intended use is through the Piazza service, though it can also be used as a standalone service.  Currently accepts both GET and POST calls, with identical parameters.  Actually using the service requires that you call the "execute" endpoint of whatever base the service is called on (example: "http://localhost:8080/execute").  Beyond that, valid and accepted parameters (query parameters for Get, form parameters for POST) are as follows:
 
-cmd: the second part of the exec call, potentially allowing some degree of control.
+cmd: The second part of the exec call (following CliCmd).  Additional commands after the first are not supported.  Allows the user some control over the process by influencing input params.
 
 inFiles: a comma separated list (no spaces) of Piazza dataIds.  the files corresponding to those dataIds will be downloaded into the same directory as the program being served prior to execution, allowing for remote file inputs to the process.
 
-outTiffs: a comma separated list (no spaces) of filenames.  Those filenames should correspond to .tif files that will be in the same directory as the program being served after the program has finished execution.  They will be uploaded to the chosen Piazza instance, and the resulting dataIds will be returned with the service results, allowing for file-based returns of images.
+outTiffs: a comma separated list (no spaces) of filenames.  Those filenames should correspond to .tif files that will be in the same directory as the program being served after the program has finished execution.  They will be uploaded to the chosen Piazza instance, and the resulting dataIds will be returned with the service results, allowing for file-based returns of images.  Must be in proper TIFF format
 
-outTxts: as with outTiffs, but text files.  Actual extension doesn't matter as long as the result can be meaningfully interpreted as raw text.
+outTxts: as with outTiffs, but text files.  Actual extension doesn't matter as long as the result can be meaningfully interpreted as raw text.  Not suitable for large files.
+
+outGeoJson: as with outTiffs and outTxts, but with GeoJson files.  Must be in proper GeoJson fromat.
 
 pz: if this parameter is defined as anything other than the empty string, the service will return its result in a format designed for Piazza consumption.  This is intended to support being called through Piazza as a job.  If the service is beign called directly, this should be left blank.
+
+## Example http calls
+
+`http://<address:port>/execute`
+- No uploads, no downloads, direct access rather than through piazza, just running whatever command CliCmd has to offer
+
+`http://localhost:8080/execute?cmd=ls;inFiles=a10e6611-b996-4491-8988-ad0624ae8b6a,f71159c8-836d-4fcc-b8d9-4e9fb032e7a6,10fa1980-f0b5-4138-9f64-64b6fe7f73b2;outTiffs=garden_rgb.tif,garden_b6.tif,garden_b3.tif;outTxts=testSend.txt;outGeoJson=tester.json;pz=true`
+- Assumes that CliCmd is blank.  Attempts to download 3 files, followed by checking the contents of the local directory, followed by uploading 5 files (3 Tiffs, a GeoJson, and a text file), and expects the results to be consumed by Piazza before being made available to the user.  Results should include the DataIds of all uploaded files in addition to the standard output for ls and the Piazza wrapper.
+
+
+
+outTiffs=garden_rgb.tif,garden_b6.tif,garden_b3.tif

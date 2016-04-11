@@ -186,7 +186,12 @@ func IngestTiff (filename, jobAddress string) (string, error) {
 	return ingestMultipart(jsonStr, jobAddress, filename)
 }
 
+func IngestGeoJson (filename, jobAddress string) (string, error) {
 
+	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "geojson" }, "metadata": { "name": "%s", "description": "This is a test.", "classType": { "classification": "unclassified" } } } } }`, filename)
+
+	return ingestMultipart(jsonStr, jobAddress, filename)
+}
 
 func IngestTxt (filename, jobAddress string) (string, error) {
 	textblock, err := ioutil.ReadFile(fmt.Sprintf(`./%s`, filename))
