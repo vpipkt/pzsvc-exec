@@ -35,20 +35,22 @@ type ConfigType struct {
 	PzFileAddr string
 }
 
+type OutStruct struct {
+    InFiles map[string] string
+    OutFiles map[string] string
+	ProgReturn string
+}
+
 func main() {
 
 	// first argument after the base call should be the path to the config file.
 	// ReadFile returns the contents of the file as a byte buffer.
 	configBuf, err := ioutil.ReadFile(os.Args[1])
-	if err != nil {
-		fmt.Println("error:", err)
-	}
+	if err != nil { fmt.Println("error:", err) }
 
 	var configObj ConfigType
 	err = json.Unmarshal(configBuf, &configObj)
-	if err != nil {
-		fmt.Println("error:", err)
-	}
+	if err != nil { fmt.Println("error:", err) }
 
 	//- check that config file data is complete.  Checks other dependency requirements (if any)
 	//- register on Pz
@@ -94,7 +96,12 @@ func main() {
 				outTxtSlice := splitOrNil(outTxtStr, ",")
 				outGeoJSlice := splitOrNil(outGeoJStr, ",")
 
-				output := ""
+				var output OutStruct
+				
+				if len(inFileSlice) > 0 { output.InFiles = make(map[string]string) }
+				if len(outTiffSlice) + len(outTxtSlice) + len(outGeoJSlice)  > 0 {
+					output.OutFiles = make(map[string]string)
+				}
 
 				for _, inFile := range inFileSlice {
 
@@ -102,14 +109,15 @@ func main() {
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
-						output += ("input: " + fName + "\n")
+						output.InFiles[configObj.PzFileAddr] = fName
 					}
 				}
-
+				
 				if len(cmdSlice) == 0 {
 					fmt.Fprintf(w, `No cmd specified in config file.  Please provide "cmd" param.`)
 					break
 				}
+
 				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
 
 				var b bytes.Buffer
@@ -117,48 +125,48 @@ func main() {
 				clc.Stderr = os.Stderr
 
 				err = clc.Run()
-				if err != nil {
-					fmt.Fprintf(w, err.Error())
-				}
+				if err != nil { fmt.Fprintf(w, err.Error()) }
 
-
+				output.ProgReturn = b.String()
 
 				for _, outTiff := range outTiffSlice {
-					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzJobAddr)
+					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzJobAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
-						output += ("Tiff output: " + dataId + "\n")
+						output.OutFiles[outTiff] = dataId
 					}
 				}
 
 				for _, outTxt := range outTxtSlice {
-					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzJobAddr)
+					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzJobAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
-						output += ("Txt output: " + dataId + "\n")
+						output.OutFiles[outTxt] = dataId
 					}
 				}
 
 				for _, outGeoJ := range outGeoJSlice {
-					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzJobAddr)
+					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzJobAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
-						output += ("GeoJson output: " + dataId + "\n")
+						output.OutFiles[outGeoJ] = dataId
 					}
 				}
 
-				output += "/********************/\n"
-				output += b.String()
+				outBuf, err := json.Marshal(output)
+				if err != nil { fmt.Fprintf(w, err.Error()) }
+				
+				outStr := string(outBuf)
 
 				if usePz != "" {
-					output = strconv.QuoteToASCII(output)
-					output = fmt.Sprintf ( `{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, output )
+					outStr = strconv.QuoteToASCII(outStr)
+					outStr = fmt.Sprintf ( `{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, outStr )
 				}
 
-				fmt.Fprintf(w, output)
+				fmt.Fprintf(w, outStr)
 				
 			}
 			case "/help":

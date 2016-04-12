@@ -39,6 +39,8 @@ type IngJsonResp struct {
 type StatusJsonResult struct {
 	Type string
 	DataId string
+	Message string
+	Details string
 }
 
 type StatusJsonResp struct {
@@ -136,12 +138,16 @@ fmt.Println(respBuf.String())
 			return "", err
 		}
 
-		if respObj.Status == "Success" {
+		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" {
+			time.Sleep(200 * time.Millisecond)
+		} else if respObj.Status == "Success" {
 			lastErr = nil
 			break
+		} else if respObj.Status == "Error" || respObj.Status == "Fail" {
+			return "", errors.New(respObj.Status + ": " + respObj.Result.Message + respObj.Result.Details)
+		} else {
+			return "", errors.New("Unknown status: " + respObj.Status)
 		}
-
-		time.Sleep(200 * time.Millisecond)
 	}
 
 	return respObj.Result.DataId, lastErr	
@@ -177,102 +183,27 @@ fmt.Println(respBuf.String())
 	return dataId, err
 }
 
+func IngestTiff (filename, jobAddress, cmdName string) (string, error) {
 
-
-func IngestTiff (filename, jobAddress string) (string, error) {
-
-	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "raster" }, "metadata": { "name": "%s", "description": "raster uploaded by pzsvc-exec.", "classType": { "classification": "unclassified" } } } } }`, filename)
+	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "raster" }, "metadata": { "name": "%s", "description": "raster uploaded by pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, filename, cmdName)
 
 	return ingestMultipart(jsonStr, jobAddress, filename)
 }
 
-func IngestGeoJson (filename, jobAddress string) (string, error) {
+func IngestGeoJson (filename, jobAddress, cmdName string) (string, error) {
 
-	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "geojson" }, "metadata": { "name": "%s", "description": "This is a test.", "classType": { "classification": "unclassified" } } } } }`, filename)
+	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "geojson" }, "metadata": { "name": "%s", "description": "GeoJson uploaded by pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, filename, cmdName)
 
 	return ingestMultipart(jsonStr, jobAddress, filename)
 }
 
-func IngestTxt (filename, jobAddress string) (string, error) {
+func IngestTxt (filename, jobAddress, cmdName string) (string, error) {
 	textblock, err := ioutil.ReadFile(fmt.Sprintf(`./%s`, filename))
 	if err != nil {
 		return "", err
 	}
 
-	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" :{ "dataType": { "type": "text", "mimeType": "application/text", "content": "%s" }, "metadata": { "name": "%s", "description": "text output from pzsvc-exec.", "classType": { "classification": "unclassified" } } } } }`, string(textblock), filename)
-
-//TODO: consider upgrading the description field, both here and for the TIFF upload.  Possibly include name of CLI program?
+	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" :{ "dataType": { "type": "text", "mimeType": "application/text", "content": "%s" }, "metadata": { "name": "%s", "description": "text output from pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, string(textblock), filename, cmdName)
 
 	return ingestMultipart(jsonStr, jobAddress, "")
 }
-
-
-
-
-
-/*
-
-**** Ingest call (in Post - plus a tiff file.  ???)
-https://pz-gateway.stage.geointservices.io/job
-{ 	"userName": "my-api-key-38n987",
- 	"jobType": {
- 		"type": "ingest",
- 		"host": "true",
- 		"data" : {
- 			"dataType": {
- 				"type": "raster"
- 			},
- 			"metadata": {
- 				"name": "My Test Raster",
- 				"description": "This is a test.",
- 				"classType": {
- 					"classification": "unclassified"
- 				}
-			}
- 		}
- 	}
- }
-
-**** response from same
-{
-  "type": "job",
-  "jobId": "b91673c0-4140-4a8a-a27a-39ec251cfac3"
-}
-**** call to ask for data on status
-https://pz-gateway.stage.geointservices.io/job
-{
-"userName": "my-api-key-38n987",
-"jobType": {
-	"type": "get",
-	"jobId": "b91673c0-4140-4a8a-a27a-39ec251cfac3"
-	}
-}
-
-
-**** format of the return from the get call, after a successful ingest
-{
-  "type": "status",
-  "jobId": "b91673c0-4140-4a8a-a27a-39ec251cfac3",
-  "result": {
-    "type": "data",
-    "dataId": "92e3ba56-a0be-4039-88d3-e988e2052d49"
-  },
-  "status": "Success",
-  "progress": {
-    "percentComplete": 100
-  }
-}
-
-**** format of call to get the actual file
-https://pz-gateway.stage.geointservices.io/file
-{
-	"userName": "my-api-key-38n987",
-	"dataId": "8e510728-0fb5-419b-9838-1308a202be33"
-}
-
-other valid dataId: b4ac11f7-eedd-42ff-87f8-fc48e1079d2a
-
-
-*/
-
-
