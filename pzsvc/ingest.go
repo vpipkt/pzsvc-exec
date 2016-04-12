@@ -113,6 +113,8 @@ func Download(dataId, address string) (string, error) {
 
 func getStatus (jobId, jobAddress string) (string, error) {
 
+time.Sleep(1000 * time.Millisecond)
+
 	var respObj StatusJsonResp
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "get", "jobId": "%s" } }`, jobId)
 
