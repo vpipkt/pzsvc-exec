@@ -109,7 +109,7 @@ func main() {
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
-						output.InFiles[configObj.PzFileAddr] = fName
+						output.InFiles[inFile] = fName
 					}
 				}
 				
