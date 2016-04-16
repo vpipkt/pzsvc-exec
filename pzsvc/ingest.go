@@ -50,7 +50,7 @@ type StatusJsonResp struct {
 	Status string
 }
 
-func submitMultipart (bodyStr, jobAddress, upload string) (*http.Response, error){
+func submitMultipart (bodyStr, address, upload string) (*http.Response, error){
 	
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -74,7 +74,7 @@ func submitMultipart (bodyStr, jobAddress, upload string) (*http.Response, error
 	err = writer.Close()
 	if err != nil { return nil, err }
 
-	fileReq, err := http.NewRequest("POST", jobAddress, body)
+	fileReq, err := http.NewRequest("POST", address, body)
 	if err != nil { return nil, err }
 	
 	fileReq.Header.Add("Content-Type", writer.FormDataContentType())
@@ -87,11 +87,11 @@ func submitMultipart (bodyStr, jobAddress, upload string) (*http.Response, error
 }
 
 
-func Download(dataId, address string) (string, error) {
+func Download(dataId, pzAddr string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "dataId": "%s"}`, dataId)
 
-	resp, err := submitMultipart( jsonStr, address, "")
+	resp, err := submitMultipart( jsonStr, (pzAddr+"/file"), "")
 	if resp != nil { defer resp.Body.Close() }
 	if err != nil { return "", err }
 
@@ -111,7 +111,7 @@ func Download(dataId, address string) (string, error) {
 }
 
 
-func getStatus (jobId, jobAddress string) (string, error) {
+func getStatus (jobId, pzAddr string) (string, error) {
 
 time.Sleep(1000 * time.Millisecond)
 
@@ -122,7 +122,7 @@ time.Sleep(1000 * time.Millisecond)
 
 	for i:=0; i<100; i++{
 
-		resp, err := submitMultipart(jsonStr, jobAddress, "")
+		resp, err := submitMultipart(jsonStr, (pzAddr+"/job"), "")
 		if resp != nil { defer resp.Body.Close() }
 		if err != nil { return "", err }
 
@@ -156,56 +156,105 @@ fmt.Println(respBuf.String())
 }
 
 
-func ingestMultipart (bodyStr, jobAddress, filename string) (string, error) {
+func ingestMultipart (bodyStr, pzAddr, filename string) (string, error) {
 
-
-	resp, err := submitMultipart(bodyStr, jobAddress, filename)
-	if err != nil {
-		return "", err
-	}
-
+	resp, err := submitMultipart(bodyStr, (pzAddr+"/job"), filename)
+	if err != nil { return "", err }
 
 	respBuf := &bytes.Buffer{}
 
 	_, err = respBuf.ReadFrom(resp.Body)
-	if err != nil {
-		return "", err
-	}
+	if err != nil { return "", err }
 
 fmt.Println(respBuf.String())
 
 	var respObj IngJsonResp
 	err = json.Unmarshal(respBuf.Bytes(), &respObj)
-	if err != nil {
-		fmt.Println("error:", err)
-	}	
+	if err != nil { fmt.Println("error:", err) }	
 
-	dataId, err := getStatus(respObj.JobId, jobAddress)
+	dataId, err := getStatus(respObj.JobId, pzAddr)
 
 	return dataId, err
 }
 
-func IngestTiff (filename, jobAddress, cmdName string) (string, error) {
+func IngestTiff (filename, pzAddr, cmdName string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "raster" }, "metadata": { "name": "%s", "description": "raster uploaded by pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, filename, cmdName)
 
-	return ingestMultipart(jsonStr, jobAddress, filename)
+	return ingestMultipart(jsonStr, pzAddr, filename)
 }
 
-func IngestGeoJson (filename, jobAddress, cmdName string) (string, error) {
+func IngestGeoJson (filename, pzAddr, cmdName string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "geojson" }, "metadata": { "name": "%s", "description": "GeoJson uploaded by pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, filename, cmdName)
 
-	return ingestMultipart(jsonStr, jobAddress, filename)
+	return ingestMultipart(jsonStr, pzAddr, filename)
 }
 
-func IngestTxt (filename, jobAddress, cmdName string) (string, error) {
+func IngestTxt (filename, pzAddr, cmdName string) (string, error) {
 	textblock, err := ioutil.ReadFile(fmt.Sprintf(`./%s`, filename))
-	if err != nil {
-		return "", err
-	}
+	if err != nil { return "", err }
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" :{ "dataType": { "type": "text", "mimeType": "application/text", "content": "%s" }, "metadata": { "name": "%s", "description": "text output from pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, string(textblock), filename, cmdName)
 
-	return ingestMultipart(jsonStr, jobAddress, "")
+	return ingestMultipart(jsonStr, pzAddr, "")
+}
+
+func RegisterSvc (svcName, svcType, pzAddr string) error {
+// two paths: either we ask for the entire registration structure in the config file json,
+// or we ask for specific details, and fill in the details ourselves.  My inclination is
+// to go with the "specific details" route.  It'll mean that the metaservice will have to
+// be updated whenever the Pz input formats change, but that's going to have to happen anyway.
+// - service name
+// - service description
+// - 
+//
+// - remember to include the BF-indicating metadata
+	return nil
+}
+
+func UpdateSvc (svcName, svcType, svcId, pzAddr string) error {
+// as RegisterSvc, but updating service data rather than registering fresh.
+	return nil
+}
+
+// Searches Pz for a service matching the input information.  if it finds one,
+// returns the service ID.  If it does not, returns an empty string.
+func FindSvc (svcName, pzAddr string) (string, error) {
+
+	req, err := http.NewRequest("GET", (pzAddr+"/service/me"), nil)
+	if err != nil { return "", err }
+	
+	q := req.URL.Query()
+	q.Add("keyword", svcName)
+	req.URL.RawQuery = q.Encode()
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if resp != nil { defer resp.Body.Close() }
+	if err != nil { return "", err }
+
+	respBuf := &bytes.Buffer{}
+
+	_, err = respBuf.ReadFrom(resp.Body)
+	if err != nil { return "", err }
+	
+	
+	
+	
+	
+	return "", nil
+}
+
+func ManageRegistration (svcName, svcType, pzAddr string) error {
+	svcId, err := FindSvc(svcName, pzAddr)
+	if err != nil { return err }
+		
+	if svcId == "" {
+		err = RegisterSvc(svcName, svcType, pzAddr)
+		if err != nil { return err }
+	} else {
+		err = UpdateSvc(svcName, svcType, svcId, pzAddr)
+		if err != nil { return err }
+	}
+	return nil
 }

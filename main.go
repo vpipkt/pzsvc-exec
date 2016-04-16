@@ -31,8 +31,12 @@ import (
 
 type ConfigType struct {
 	CliCmd string
-	PzJobAddr string
-	PzFileAddr string
+	PzAddr string
+	SvcName string
+	SvcType string
+	Port int
+	Description string
+	Attributes interface {}
 }
 
 type OutStruct struct {
@@ -54,7 +58,11 @@ func main() {
 
 	//- check that config file data is complete.  Checks other dependency requirements (if any)
 	//- register on Pz
-
+	
+	if configObj.SvcName != "" && configObj.PzAddr != "" {
+		pzsvc.ManageRegistration(configObj.SvcName, configObj.SvcType, configObj.PzAddr)
+	}
+	
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		switch r.URL.Path{
@@ -105,7 +113,7 @@ func main() {
 
 				for _, inFile := range inFileSlice {
 
-					fName, err := pzsvc.Download(inFile, configObj.PzFileAddr)
+					fName, err := pzsvc.Download(inFile, configObj.PzAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
@@ -130,7 +138,7 @@ func main() {
 				output.ProgReturn = b.String()
 
 				for _, outTiff := range outTiffSlice {
-					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzJobAddr, cmdSlice[0])
+					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
@@ -139,7 +147,7 @@ func main() {
 				}
 
 				for _, outTxt := range outTxtSlice {
-					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzJobAddr, cmdSlice[0])
+					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
@@ -148,7 +156,7 @@ func main() {
 				}
 
 				for _, outGeoJ := range outGeoJSlice {
-					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzJobAddr, cmdSlice[0])
+					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 					} else {
@@ -163,23 +171,41 @@ func main() {
 
 				if usePz != "" {
 					outStr = strconv.QuoteToASCII(outStr)
+// TODO: clean this up a bit, and possibly move it back into
+// the support function.
+// - possibly include metadata to help on results searches?  Talk with Marge on where/how to put it in.
 					outStr = fmt.Sprintf ( `{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, outStr )
 				}
 
 				fmt.Fprintf(w, outStr)
 				
 			}
+			case "/description":
+				if configObj.Description == "" {
+					fmt.Fprintf (w, "No description defined")
+				} else {
+					fmt.Fprintf(w, configObj.Description)
+				}
+			case "/attributes":
+				if configObj.Attributes == "" {
+					fmt.Fprintf (w, "{ }")
+				} else {
+// convert attributes back into Json
+// this might require specifying the interface a bit better.
+//					fmt.Fprintf(w, configObj.Attributes)
+				}
 			case "/help":
-				help(w)
+				fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
 			default:
-				other(w)
+				fmt.Fprintf(w, "Command undefined.  Try help?\n")
 		}
 	})
 
-// might want to update Port number at some point - possibly to os.Getenve(“PORT”),
-// possibly to some other defined port - talk with the Pz folks over what their
-// system is
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	if configObj.Port <= 0 { configObj.Port = 8080 }
+
+	portStr := ":" + strconv.Itoa(configObj.Port)
+
+	log.Fatal(http.ListenAndServe(portStr, nil))
 }
 
 func splitOrNil(inString, knife string) []string {
@@ -189,13 +215,3 @@ fmt.Printf("SplitOrNull: \"%s\", split by \"%s\".\n", inString, knife)
 	}
 	return strings.Split(inString, knife)
 }
-
-
-func other(w http.ResponseWriter) {
-	fmt.Fprintf(w, "Command undefined.  Try help?\n")
-}
-
-func help(w http.ResponseWriter) {
-	fmt.Fprintf(w, "We're sorry, help is not yet implemented\n")
-}
-

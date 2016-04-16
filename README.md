@@ -23,11 +23,19 @@ To Run:
 
 The example config file in this directory includes all pertinent potential entries, and should be used as an example.  Additional entries are meaningless but nonharmful, as long as standard json format is maintained.  No entries are strictly speaking mandatory, though leaving them out will often eliminate various kinds of functionality.
 
-CliCmd: the initial parameters of the exec call.  For security reasons, you are strongly encouraged to put something here, thus limiting your service to a single application.  If you do not, you are essentially offering open command-line access to anyone capable of calling your service.  
+CliCmd: The initial parameters of the exec call.  For security reasons, you are strongly encouraged to define this entry as something other than the empty string, thus limiting your service to a single application.  If you do not, you are essentially offering open command-line access to anyone capable of calling your service.  
 
-PzJobAddr: For use with a Piazza instance.  This is the general job scheduler endpoint of the chosen Piazza instance, and is necessary for the file upload and download functionalities.
+PzAddr: For use with a Piazza instance.  This is the base http or https address of the chosen Piazza instance, and is necessary for the file upload, file download, and autoregistration functionalities.
 
-PzFileAddr: For use with a Piazza instance.  This is the file download endpoint of the chosen Piazza instance, and is necessary for the file download functionality.
+SvcName: Primarily for purposes of Piazza registration.  This is the name by which the service will identify itself.  Maintaining SvcName uniqueness among your services is important, as it will be used to determine on execution whether a service is being launched for the first time, or whether it is a continuation of a previous service.  Maintaining SvcName uniqueness in general is not as critical, as identity of launching user will also be used as a component.  It is necessary for the autoregistration functionality.
+
+SvcType: Primarily for purposes of Piazza registration.  This is an indicator of type of service, and is intended to simplify searches by service consumers.  For example, the Beachfront GUI might search for all services with a SvcType of "Beachfront".  It is not necessary for any functionality.
+
+Port: The port this service serves on.  If not defined, will default to 8080.
+
+Description: A simple text description of your service.  Used in registration, and also available through the "/description" endpoint.
+
+Attributes: A block of freeform Json for you to set additional descriptive attributes.  Used in registration, and also available through the "/attributes" endpoint.  Primarily intended to aid communication between services and service consumers with respect to the details of a service.
 
 ## Using
 
@@ -53,6 +61,3 @@ pz: if this parameter is defined as anything other than the empty string, the se
 `http://localhost:8080/execute?cmd=ls;inFiles=a10e6611-b996-4491-8988-ad0624ae8b6a,f71159c8-836d-4fcc-b8d9-4e9fb032e7a6,10fa1980-f0b5-4138-9f64-64b6fe7f73b2;outTiffs=garden_rgb.tif,garden_b6.tif,garden_b3.tif;outTxts=testSend.txt;outGeoJson=tester.json;pz=true`
 - Assumes that CliCmd is blank.  Attempts to download 3 files, followed by checking the contents of the local directory, followed by uploading 5 files (3 Tiffs, a GeoJson, and a text file), and expects the results to be consumed by Piazza before being made available to the user.  Results should include the DataIds of all uploaded files in addition to the standard output for ls and the Piazza wrapper.
 
-
-
-outTiffs=garden_rgb.tif,garden_b6.tif,garden_b3.tif

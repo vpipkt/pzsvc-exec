@@ -1,5 +1,15 @@
 {
-	"CliCmd":"",
-	"PzJobAddr":"https://pz-gateway.stage.geointservices.io/job",
-	"PzFileAddr":"https://pz-gateway.stage.geointservices.io/file"
+	"CliCmd":"ossim-cli",
+	"PzAddr":"https://pz-gateway.stage.geointservices.io",
+	"SvcName":"OSSIM client"
+	"SvcType":"Beachfront"
+	"Url":"https://pz-svcs-prevgen.stage.geointservices.io/ossimcli"
+	"Port":"8080"
+	"Description":"The OSSIM shoreline-determination algorithm, served via piazza"
+	"Attributes":{
+		"Interface":"pzsvc-exec/ossim"
+		"MaxSize":"2G"
+		"FavColor":"Blue"
+	}
 }
+
