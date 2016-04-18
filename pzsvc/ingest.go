@@ -19,8 +19,8 @@ package pzsvc
 
 import (
 	"bytes"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,78 +31,99 @@ import (
 	"time"
 )
 
-type IngJsonResp struct {
-	Type string
+type JobResp struct {
+	Type  string
 	JobId string
 }
 
 type StatusJsonResult struct {
-	Type string
-	DataId string
+	Type    string
+	DataId  string
 	Message string
 	Details string
 }
 
 type StatusJsonResp struct {
-	Type string
-	JobId string
+	Type   string
+	JobId  string
 	Result StatusJsonResult
 	Status string
 }
 
-func submitMultipart (bodyStr, address, upload string) (*http.Response, error){
-	
+func submitMultipart(bodyStr, address, upload string) (*http.Response, error) {
+
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-
+fmt.Println("1")
 	err := writer.WriteField("body", bodyStr)
-	if err != nil { return nil, err }
-
+	if err != nil {
+		return nil, err
+	}
+fmt.Println("2")
 	if upload != "" {
 		file, err := os.Open(fmt.Sprintf(`./%s`, upload))
-		if err != nil { return nil, err }
-
+		if err != nil {
+			return nil, err
+		}
+fmt.Println("3")
 		defer file.Close()
 
 		part, err := writer.CreateFormFile("file", upload)
-		if err != nil { return nil, err }
-
+		if err != nil {
+			return nil, err
+		}
+fmt.Println("4")
 		_, err = io.Copy(part, file)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 	}
-
+fmt.Println("5")
 	err = writer.Close()
-	if err != nil { return nil, err }
-
+	if err != nil {
+		return nil, err
+	}
+fmt.Println("6")
 	fileReq, err := http.NewRequest("POST", address, body)
-	if err != nil { return nil, err }
-	
+	if err != nil {
+		return nil, err
+	}
+fmt.Println("7")
 	fileReq.Header.Add("Content-Type", writer.FormDataContentType())
 
 	client := &http.Client{}
 	resp, err := client.Do(fileReq)
-	if err != nil { return nil, err }
-
+	if err != nil {
+		return nil, err
+	}
+fmt.Println("8")
 	return resp, err
 }
-
 
 func Download(dataId, pzAddr string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "dataId": "%s"}`, dataId)
 
-	resp, err := submitMultipart( jsonStr, (pzAddr+"/file"), "")
-	if resp != nil { defer resp.Body.Close() }
-	if err != nil { return "", err }
+	resp, err := submitMultipart(jsonStr, (pzAddr + "/file"), "")
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		return "", err
+	}
 
 	contDisp := resp.Header.Get("Content-Disposition")
 	_, params, err := mime.ParseMediaType(contDisp)
 	filename := params["filename"]
-	if filename == "" { filename = "dummy.txt" }
+	if filename == "" {
+		filename = "dummy.txt"
+	}
 	filepath := fmt.Sprintf(`./%s`, filename)
 
 	out, err := os.Create(filepath)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	defer out.Close()
 	io.Copy(out, resp.Body)
@@ -110,21 +131,24 @@ func Download(dataId, pzAddr string) (string, error) {
 	return filename, nil
 }
 
+func getStatus(jobId, pzAddr string) (string, error) {
 
-func getStatus (jobId, pzAddr string) (string, error) {
-
-time.Sleep(1000 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 
 	var respObj StatusJsonResp
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "get", "jobId": "%s" } }`, jobId)
 
 	lastErr := errors.New("Never completed.")
 
-	for i:=0; i<100; i++{
+	for i := 0; i < 100; i++ {
 
-		resp, err := submitMultipart(jsonStr, (pzAddr+"/job"), "")
-		if resp != nil { defer resp.Body.Close() }
-		if err != nil { return "", err }
+		resp, err := submitMultipart(jsonStr, (pzAddr + "/job"), "")
+		if resp != nil {
+			defer resp.Body.Close()
+		}
+		if err != nil {
+			return "", err
+		}
 
 		respBuf := &bytes.Buffer{}
 
@@ -133,7 +157,7 @@ time.Sleep(1000 * time.Millisecond)
 			return "", err
 		}
 
-fmt.Println(respBuf.String())
+		fmt.Println(respBuf.String())
 
 		err = json.Unmarshal(respBuf.Bytes(), &respObj)
 		if err != nil {
@@ -152,109 +176,128 @@ fmt.Println(respBuf.String())
 		}
 	}
 
-	return respObj.Result.DataId, lastErr	
+	return respObj.Result.DataId, lastErr
 }
 
+func ingestMultipart(bodyStr, pzAddr, filename string) (string, error) {
 
-func ingestMultipart (bodyStr, pzAddr, filename string) (string, error) {
-
-	resp, err := submitMultipart(bodyStr, (pzAddr+"/job"), filename)
-	if err != nil { return "", err }
+	resp, err := submitMultipart(bodyStr, (pzAddr + "/job"), filename)
+	if err != nil {
+		return "", err
+	}
 
 	respBuf := &bytes.Buffer{}
 
 	_, err = respBuf.ReadFrom(resp.Body)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
-fmt.Println(respBuf.String())
+	fmt.Println(respBuf.String())
 
-	var respObj IngJsonResp
+	var respObj JobResp
 	err = json.Unmarshal(respBuf.Bytes(), &respObj)
-	if err != nil { fmt.Println("error:", err) }	
+	if err != nil {
+		fmt.Println("error:", err)
+	}
 
 	dataId, err := getStatus(respObj.JobId, pzAddr)
 
 	return dataId, err
 }
 
-func IngestTiff (filename, pzAddr, cmdName string) (string, error) {
+func IngestTiff(filename, pzAddr, cmdName string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "raster" }, "metadata": { "name": "%s", "description": "raster uploaded by pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, filename, cmdName)
 
 	return ingestMultipart(jsonStr, pzAddr, filename)
 }
 
-func IngestGeoJson (filename, pzAddr, cmdName string) (string, error) {
+func IngestGeoJson(filename, pzAddr, cmdName string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "geojson" }, "metadata": { "name": "%s", "description": "GeoJson uploaded by pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, filename, cmdName)
 
 	return ingestMultipart(jsonStr, pzAddr, filename)
 }
 
-func IngestTxt (filename, pzAddr, cmdName string) (string, error) {
+func IngestTxt(filename, pzAddr, cmdName string) (string, error) {
 	textblock, err := ioutil.ReadFile(fmt.Sprintf(`./%s`, filename))
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" :{ "dataType": { "type": "text", "mimeType": "application/text", "content": "%s" }, "metadata": { "name": "%s", "description": "text output from pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, string(textblock), filename, cmdName)
 
 	return ingestMultipart(jsonStr, pzAddr, "")
 }
 
-func RegisterSvc (svcName, svcType, pzAddr string) error {
-// two paths: either we ask for the entire registration structure in the config file json,
-// or we ask for specific details, and fill in the details ourselves.  My inclination is
-// to go with the "specific details" route.  It'll mean that the metaservice will have to
-// be updated whenever the Pz input formats change, but that's going to have to happen anyway.
-// - service name
-// - service description
-// - 
-//
-// - remember to include the BF-indicating metadata
+func RegisterSvc(svcName, svcType, pzAddr string) error {
+	// two paths: either we ask for the entire registration structure in the config file json,
+	// or we ask for specific details, and fill in the details ourselves.  My inclination is
+	// to go with the "specific details" route.  It'll mean that the metaservice will have to
+	// be updated whenever the Pz input formats change, but that's going to have to happen anyway.
+	// - service name
+	// - service description
+	// -
+	//
+	// - remember to include the BF-indicating metadata
 	return nil
 }
 
-func UpdateSvc (svcName, svcType, svcId, pzAddr string) error {
-// as RegisterSvc, but updating service data rather than registering fresh.
+func UpdateSvc(svcName, svcType, svcId, pzAddr string) error {
+	// as RegisterSvc, but updating service data rather than registering fresh.
 	return nil
 }
 
 // Searches Pz for a service matching the input information.  if it finds one,
 // returns the service ID.  If it does not, returns an empty string.
-func FindSvc (svcName, pzAddr string) (string, error) {
+// currently only semi-functional.  Read through and vet carefully before declaring functional.
 
-	req, err := http.NewRequest("GET", (pzAddr+"/service/me"), nil)
-	if err != nil { return "", err }
-	
+func FindSvc(svcName, pzAddr string) (string, error) {
+
+	req, err := http.NewRequest("GET", (pzAddr + "/service/me"), nil)
+	if err != nil {
+		return "", err
+	}
+
 	q := req.URL.Query()
 	q.Add("keyword", svcName)
 	req.URL.RawQuery = q.Encode()
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	if resp != nil { defer resp.Body.Close() }
-	if err != nil { return "", err }
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		return "", err
+	}
 
 	respBuf := &bytes.Buffer{}
 
 	_, err = respBuf.ReadFrom(resp.Body)
-	if err != nil { return "", err }
-	
-	
-	
-	
-	
+	if err != nil {
+		return "", err
+	}
+
 	return "", nil
 }
 
-func ManageRegistration (svcName, svcType, pzAddr string) error {
+func ManageRegistration(svcName, svcType, pzAddr string) error {
 	svcId, err := FindSvc(svcName, pzAddr)
-	if err != nil { return err }
-		
+	if err != nil {
+		return err
+	}
+
 	if svcId == "" {
 		err = RegisterSvc(svcName, svcType, pzAddr)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	} else {
 		err = UpdateSvc(svcName, svcType, svcId, pzAddr)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

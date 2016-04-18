@@ -30,18 +30,18 @@ import (
 )
 
 type ConfigType struct {
-	CliCmd string
-	PzAddr string
-	SvcName string
-	SvcType string
-	Port int
+	CliCmd      string
+	PzAddr      string
+	SvcName     string
+	SvcType     string
+	Port        int
 	Description string
-	Attributes interface {}
+	Attributes  interface{}
 }
 
 type OutStruct struct {
-    InFiles map[string] string
-    OutFiles map[string] string
+	InFiles    map[string]string
+	OutFiles   map[string]string
 	ProgReturn string
 }
 
@@ -50,25 +50,30 @@ func main() {
 	// first argument after the base call should be the path to the config file.
 	// ReadFile returns the contents of the file as a byte buffer.
 	configBuf, err := ioutil.ReadFile(os.Args[1])
-	if err != nil { fmt.Println("error:", err) }
+	if err != nil {
+		fmt.Println("error:", err)
+	}
 
 	var configObj ConfigType
 	err = json.Unmarshal(configBuf, &configObj)
-	if err != nil { fmt.Println("error:", err) }
+	if err != nil {
+		fmt.Println("error:", err)
+	}
 
 	//- check that config file data is complete.  Checks other dependency requirements (if any)
 	//- register on Pz
-	
+
 	if configObj.SvcName != "" && configObj.PzAddr != "" {
 		pzsvc.ManageRegistration(configObj.SvcName, configObj.SvcType, configObj.PzAddr)
 	}
-	
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
-		switch r.URL.Path{
-			case "/":
-				fmt.Fprintf(w, "hello.")
-			case "/execute": {
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprintf(w, "hello.")
+		case "/execute":
+			{
 
 				var cmdParam string
 				var inFileStr string
@@ -77,7 +82,7 @@ func main() {
 				var outGeoJStr string
 				var usePz string
 
-// might be time to start looking into that "help" thing.
+				// might be time to start looking into that "help" thing.
 
 				if r.Method == "GET" {
 					cmdParam = r.URL.Query().Get("cmd")
@@ -105,14 +110,39 @@ func main() {
 				outGeoJSlice := splitOrNil(outGeoJStr, ",")
 
 				var output OutStruct
+
+				uuid, err := exec.Command("uuidgen").Output()
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
 				
-				if len(inFileSlice) > 0 { output.InFiles = make(map[string]string) }
-				if len(outTiffSlice) + len(outTxtSlice) + len(outGeoJSlice)  > 0 {
+				runId := string(uuid)
+				
+				err = os.Mkdir("./" + runId,0777)
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+				
+				err = os.Chmod("./" + runId,0777)
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+
+				err = os.Chdir(runId)
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+
+				if len(inFileSlice) > 0 {
+					output.InFiles = make(map[string]string)
+				}
+				if len(outTiffSlice)+len(outTxtSlice)+len(outGeoJSlice) > 0 {
 					output.OutFiles = make(map[string]string)
 				}
 
 				for _, inFile := range inFileSlice {
 
+					fmt.Printf("Downloading %s from %s.\n", inFile, configObj.PzAddr)
 					fName, err := pzsvc.Download(inFile, configObj.PzAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
@@ -120,12 +150,14 @@ func main() {
 						output.InFiles[inFile] = fName
 					}
 				}
-				
+
 				if len(cmdSlice) == 0 {
 					fmt.Fprintf(w, `No cmd specified in config file.  Please provide "cmd" param.`)
 					break
 				}
 
+				fmt.Printf("Executing \"%s\".\n", configObj.CliCmd + " " + cmdParam )
+				
 				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
 
 				var b bytes.Buffer
@@ -133,11 +165,14 @@ func main() {
 				clc.Stderr = os.Stderr
 
 				err = clc.Run()
-				if err != nil { fmt.Fprintf(w, err.Error()) }
-
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+fmt.Printf ("Program output: %s\n", b.String())
 				output.ProgReturn = b.String()
 
 				for _, outTiff := range outTiffSlice {
+					fmt.Printf("Uploading Tiff %s.\n", outTiff)
 					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
@@ -147,6 +182,7 @@ func main() {
 				}
 
 				for _, outTxt := range outTxtSlice {
+					fmt.Printf("Uploading Txt %s.\n", outTxt)
 					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
@@ -156,6 +192,7 @@ func main() {
 				}
 
 				for _, outGeoJ := range outGeoJSlice {
+					fmt.Printf("Uploading GeoJson %s.\n", outGeoJ)
 					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
@@ -165,43 +202,56 @@ func main() {
 				}
 
 				outBuf, err := json.Marshal(output)
-				if err != nil { fmt.Fprintf(w, err.Error()) }
-				
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+
 				outStr := string(outBuf)
 
 				if usePz != "" {
 					outStr = strconv.QuoteToASCII(outStr)
-// TODO: clean this up a bit, and possibly move it back into
-// the support function.
-// - possibly include metadata to help on results searches?  Talk with Marge on where/how to put it in.
-					outStr = fmt.Sprintf ( `{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, outStr )
+					// TODO: clean this up a bit, and possibly move it back into
+					// the support function.
+					// - possibly include metadata to help on results searches?  Talk with Marge on where/how to put it in.
+					outStr = fmt.Sprintf(`{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, outStr)
 				}
 
 				fmt.Fprintf(w, outStr)
-				
+
+				err = os.Chdir("..")
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+
+				err =  os.RemoveAll("./" + runId)
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
 			}
-			case "/description":
-				if configObj.Description == "" {
-					fmt.Fprintf (w, "No description defined")
-				} else {
-					fmt.Fprintf(w, configObj.Description)
-				}
-			case "/attributes":
-				if configObj.Attributes == "" {
-					fmt.Fprintf (w, "{ }")
-				} else {
-// convert attributes back into Json
-// this might require specifying the interface a bit better.
-//					fmt.Fprintf(w, configObj.Attributes)
-				}
-			case "/help":
-				fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
-			default:
-				fmt.Fprintf(w, "Command undefined.  Try help?\n")
+		case "/description":
+			if configObj.Description == "" {
+				fmt.Fprintf(w, "No description defined")
+			} else {
+				fmt.Fprintf(w, configObj.Description)
+			}
+		case "/attributes":
+			if configObj.Attributes == "" {
+				fmt.Fprintf(w, "{ }")
+			} else {
+				// convert attributes back into Json
+				// this might require specifying the interface a bit better.
+				//					fmt.Fprintf(w, configObj.Attributes)
+			}
+		case "/help":
+			fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
+		default:
+			fmt.Fprintf(w, "Command undefined.  Try help?\n")
 		}
 	})
 
-	if configObj.Port <= 0 { configObj.Port = 8080 }
+	if configObj.Port <= 0 {
+		configObj.Port = 8080
+	}
 
 	portStr := ":" + strconv.Itoa(configObj.Port)
 
@@ -209,7 +259,6 @@ func main() {
 }
 
 func splitOrNil(inString, knife string) []string {
-fmt.Printf("SplitOrNull: \"%s\", split by \"%s\".\n", inString, knife)
 	if inString == "" {
 		return nil
 	}

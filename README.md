@@ -17,7 +17,7 @@ Alternate install:
 	then call `$ go install .`
 
 To Run:
-	`GOPATH/bin/pzsvc-exec <configfile.txt>`, where <configfile.txt> represents the path to an appropriately formatted config file, indicating what command line function to use, and where to find Piazza for registration
+	`GOPATH/bin/pzsvc-exec <configfile.txt>`, where <configfile.txt> represents the path to an appropriately formatted config file, indicating what command line function to use, and where to find Piazza for registration.  Additionally, make sure that whatever application you wish to access is in your PATH.  Pzsvc-exec uses the creation of temporary folders as a way to keep from overwhelming the hard drive.  Just placing your application in the `GOPATH/bin` directory will not work.
 
 ## Config File Format
 
