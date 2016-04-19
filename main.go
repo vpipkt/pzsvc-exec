@@ -34,9 +34,10 @@ type ConfigType struct {
 	PzAddr      string
 	SvcName     string
 	SvcType     string
+	Url         string
 	Port        int
 	Description string
-	Attributes  interface{}
+	Attributes  map[string]string
 }
 
 type OutStruct struct {
@@ -61,10 +62,17 @@ func main() {
 	}
 
 	//- check that config file data is complete.  Checks other dependency requirements (if any)
-	//- register on Pz
+
+	if configObj.Port <= 0 {
+		configObj.Port = 8080
+	}
+
+	portStr := ":" + strconv.Itoa(configObj.Port)
 
 	if configObj.SvcName != "" && configObj.PzAddr != "" {
-		pzsvc.ManageRegistration(configObj.SvcName, configObj.SvcType, configObj.PzAddr)
+		fullUrl := configObj.Url + portStr
+
+		pzsvc.ManageRegistration(configObj.SvcName, configObj.SvcType, configObj.Description, fullUrl, configObj.PzAddr)
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -115,15 +123,15 @@ func main() {
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
-				
+
 				runId := string(uuid)
-				
-				err = os.Mkdir("./" + runId,0777)
+
+				err = os.Mkdir("./"+runId, 0777)
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
-				
-				err = os.Chmod("./" + runId,0777)
+
+				err = os.Chmod("./"+runId, 0777)
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
@@ -140,14 +148,16 @@ func main() {
 					output.OutFiles = make(map[string]string)
 				}
 
-				for _, inFile := range inFileSlice {
+				for i, inFile := range inFileSlice {
 
-					fmt.Printf("Downloading %s from %s.\n", inFile, configObj.PzAddr)
-					fName, err := pzsvc.Download(inFile, configObj.PzAddr)
+					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
+					fname, err := pzsvc.Download(inFile, configObj.PzAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+						fmt.Printf("Download failed.  %s", err.Error())
 					} else {
-						output.InFiles[inFile] = fName
+						output.InFiles[inFile] = fname
+						fmt.Printf("Successfully downloaded %s.", fname)
 					}
 				}
 
@@ -156,8 +166,8 @@ func main() {
 					break
 				}
 
-				fmt.Printf("Executing \"%s\".\n", configObj.CliCmd + " " + cmdParam )
-				
+				fmt.Printf("Executing \"%s\".\n", configObj.CliCmd+" "+cmdParam)
+
 				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
 
 				var b bytes.Buffer
@@ -168,34 +178,37 @@ func main() {
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
-fmt.Printf ("Program output: %s\n", b.String())
+				fmt.Printf("Program output: %s\n", b.String())
 				output.ProgReturn = b.String()
 
-				for _, outTiff := range outTiffSlice {
-					fmt.Printf("Uploading Tiff %s.\n", outTiff)
+				for i, outTiff := range outTiffSlice {
+					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
 					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outTiff] = dataId
 					}
 				}
 
-				for _, outTxt := range outTxtSlice {
-					fmt.Printf("Uploading Txt %s.\n", outTxt)
+				for i, outTxt := range outTxtSlice {
+					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
 					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outTxt] = dataId
 					}
 				}
 
-				for _, outGeoJ := range outGeoJSlice {
-					fmt.Printf("Uploading GeoJson %s.\n", outGeoJ)
+				for i, outGeoJ := range outGeoJSlice {
+					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
 					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outGeoJ] = dataId
 					}
@@ -223,7 +236,7 @@ fmt.Printf ("Program output: %s\n", b.String())
 					fmt.Fprintf(w, err.Error())
 				}
 
-				err =  os.RemoveAll("./" + runId)
+				err = os.RemoveAll("./" + runId)
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
@@ -235,7 +248,7 @@ fmt.Printf ("Program output: %s\n", b.String())
 				fmt.Fprintf(w, configObj.Description)
 			}
 		case "/attributes":
-			if configObj.Attributes == "" {
+			if configObj.Attributes == nil {
 				fmt.Fprintf(w, "{ }")
 			} else {
 				// convert attributes back into Json
@@ -248,12 +261,6 @@ fmt.Printf ("Program output: %s\n", b.String())
 			fmt.Fprintf(w, "Command undefined.  Try help?\n")
 		}
 	})
-
-	if configObj.Port <= 0 {
-		configObj.Port = 8080
-	}
-
-	portStr := ":" + strconv.Itoa(configObj.Port)
 
 	log.Fatal(http.ListenAndServe(portStr, nil))
 }
