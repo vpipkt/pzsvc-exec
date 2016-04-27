@@ -48,6 +48,11 @@ type OutStruct struct {
 
 func main() {
 
+	if len(os.Args) < 2 {
+		fmt.Println("error: Insufficient parameters.  You must specify a config file.")
+		return
+	}
+	
 	// first argument after the base call should be the path to the config file.
 	// ReadFile returns the contents of the file as a byte buffer.
 	configBuf, err := ioutil.ReadFile(os.Args[1])
@@ -61,8 +66,6 @@ func main() {
 		fmt.Println("error:", err)
 	}
 
-	//- check that config file data is complete.  Checks other dependency requirements (if any)
-
 	if configObj.Port <= 0 {
 		configObj.Port = 8080
 	}
@@ -71,8 +74,13 @@ func main() {
 
 	if configObj.SvcName != "" && configObj.PzAddr != "" {
 		fullUrl := configObj.Url + portStr
+fmt.Println("About to manage registration.")
+		err = pzsvc.ManageRegistration(configObj.SvcName, configObj.SvcType, configObj.Description, fullUrl, configObj.PzAddr)
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+fmt.Println("Registration managed.")
 
-		pzsvc.ManageRegistration(configObj.SvcName, configObj.SvcType, configObj.Description, fullUrl, configObj.PzAddr)
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

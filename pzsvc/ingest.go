@@ -27,8 +27,10 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	//"strings"
 	"time"
 )
 
@@ -95,6 +97,28 @@ func submitMultipart(bodyStr, address, upload string) (*http.Response, error) {
 	}
 
 	fileReq.Header.Add("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	resp, err := client.Do(fileReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, err
+}
+
+func submitSinglePart(method, bodyStr, address string) (*http.Response, error) {
+
+	fileReq, err := http.NewRequest(method, address, bytes.NewBuffer([]byte(bodyStr)))
+	if err != nil {
+		return nil, err
+	}
+
+    fileReq.Header.Add("Content-Type", "application/json")
+    fileReq.Header.Add("size", "30")
+    fileReq.Header.Add("from", "0")
+    fileReq.Header.Add("key", "stamp")
+    fileReq.Header.Add("order", "true")
 
 	client := &http.Client{}
 	resp, err := client.Do(fileReq)
@@ -236,13 +260,24 @@ func IngestTxt(filename, pzAddr, cmdName string) (string, error) {
 	return ingestMultipart(jsonStr, pzAddr, "")
 }
 
-func RegisterSvc(svcName, svcType, svcId, svcDesc, svcUrl, pzAddr string) error {
+func RegisterSvc(svcName, svcType, svcDesc, svcUrl, pzAddr string) error {
 
 	// TODO: add customizable metadata once the inputs are stabilized
 
-	jsonStr := fmt.Sprintf(`{ "id": "%s", "name": "%s", "resourceMetadata": { "name": "%s", "description": "string", "url": "string" }, "inputs": {}, "outputs": {} }`, svcId, svcName, svcName, svcDesc, svcUrl)
+	jsonStr := fmt.Sprintf(`{ "inputs": [], "outputs": [], "url": "%s", "resourceMetadata": { "name": "%s", "description": "%s", "method": "POST" } }`, svcUrl, svcName, svcDesc)
+fmt.Println(jsonStr)
+	_, err := submitSinglePart("POST", jsonStr, pzAddr + "/service")
+	if err != nil {
+		return err
+	}
 
-	_, err := submitMultipart(jsonStr, (pzAddr + "/service"), "")
+	return nil
+}
+
+func UpdateSvc(svcName, svcType, svcId, svcDesc, svcUrl, pzAddr string) error {
+	jsonStr := fmt.Sprintf(`{ "serviceId": "%s", "url": "%s", "resourceMetadata": { "name": "%s", "description": "%s", "method": "POST" } }`, svcId, svcUrl, svcName, svcDesc)
+	
+	_, err := submitSinglePart("PUT", jsonStr, pzAddr + "/service/" + svcId)
 	if err != nil {
 		return err
 	}
@@ -255,17 +290,23 @@ func RegisterSvc(svcName, svcType, svcId, svcDesc, svcUrl, pzAddr string) error 
 // currently only semi-functional.  Read through and vet carefully before declaring functional.
 
 func FindMySvc(svcName, pzAddr string) (string, error) {
-
-	req, err := http.NewRequest("GET", (pzAddr + "/service/me"), nil)
-	if err != nil {
-		return "", err
+	
+	type SvcData struct {
+		ServiceId			string
+		Url					string
+		ResourceMetadata	map[string]string
+	}
+	
+	type SvcWrapper struct {
+		Type		string
+		Data		[]SvcData
+		Pagination	map[string]int
+		
 	}
 
-	q := req.URL.Query()
-	q.Add("keyword", svcName)
-	req.URL.RawQuery = q.Encode()
-	client := &http.Client{}
-	resp, err := client.Do(req)
+fmt.Println(pzAddr + "/service?per_page=1000&keyword=" + url.QueryEscape(svcName))
+
+	resp, err := http.Get(pzAddr + "/service?per_page=1000&keyword=" + url.QueryEscape(svcName))	
 	if resp != nil {
 		defer resp.Body.Close()
 	}
@@ -273,22 +314,20 @@ func FindMySvc(svcName, pzAddr string) (string, error) {
 		return "", err
 	}
 
-	respBuf := &bytes.Buffer{}
-
-	_, err = respBuf.ReadFrom(resp.Body)
+	respBuf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 
-	var respObj StatusJsonResp
-	err = json.Unmarshal(respBuf.Bytes(), &respObj)
+	var respObj SvcWrapper
+	err = json.Unmarshal(respBuf, &respObj)
 	if err != nil {
 		return "", err
 	}
 
-	for _, checkServ := range respObj.Results {
-		if checkServ.Name == svcName {
-			return checkServ.Id, nil
+	for _, checkServ := range respObj.Data {
+		if checkServ.ResourceMetadata["name"] == svcName {
+			return checkServ.ServiceId, nil
 		}
 	}
 
@@ -296,12 +335,19 @@ func FindMySvc(svcName, pzAddr string) (string, error) {
 }
 
 func ManageRegistration(svcName, svcType, svcDesc, svcUrl, pzAddr string) error {
+fmt.Println("Finding")
 	svcId, err := FindMySvc(svcName, pzAddr)
 	if err != nil {
 		return err
 	}
 
-	err = RegisterSvc(svcName, svcType, svcId, svcDesc, svcUrl, pzAddr)
+	if (svcId == "") {
+fmt.Println("Registering")
+		err = RegisterSvc(svcName, svcType, svcDesc, svcUrl, pzAddr)
+	} else {
+fmt.Println("Updating")
+		err = UpdateSvc(svcName, svcType, svcId, svcDesc, svcUrl, pzAddr)
+	}
 	if err != nil {
 		return err
 	}
