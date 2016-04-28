@@ -33,7 +33,6 @@ type ConfigType struct {
 	CliCmd      string
 	PzAddr      string
 	SvcName     string
-	SvcType     string
 	Url         string
 	Port        int
 	Description string
@@ -75,7 +74,7 @@ func main() {
 	if configObj.SvcName != "" && configObj.PzAddr != "" {
 		fullUrl := configObj.Url + portStr
 fmt.Println("About to manage registration.")
-		err = pzsvc.ManageRegistration(configObj.SvcName, configObj.SvcType, configObj.Description, fullUrl, configObj.PzAddr)
+		err = pzsvc.ManageRegistration(configObj.SvcName, configObj.Description, fullUrl, configObj.PzAddr)
 		if err != nil {
 			fmt.Println("error:", err)
 		}
@@ -138,17 +137,13 @@ fmt.Println("Registration managed.")
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
+				defer os.RemoveAll("./" + runId)
 
 				err = os.Chmod("./"+runId, 0777)
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
-
-				err = os.Chdir(runId)
-				if err != nil {
-					fmt.Fprintf(w, err.Error())
-				}
-
+				
 				if len(inFileSlice) > 0 {
 					output.InFiles = make(map[string]string)
 				}
@@ -159,7 +154,7 @@ fmt.Println("Registration managed.")
 				for i, inFile := range inFileSlice {
 
 					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
-					fname, err := pzsvc.Download(inFile, configObj.PzAddr)
+					fname, err := pzsvc.Download(inFile, runId, configObj.PzAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 						fmt.Printf("Download failed.  %s", err.Error())
@@ -177,7 +172,7 @@ fmt.Println("Registration managed.")
 				fmt.Printf("Executing \"%s\".\n", configObj.CliCmd+" "+cmdParam)
 
 				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
-
+				clc.Dir = runId
 				var b bytes.Buffer
 				clc.Stdout = &b
 				clc.Stderr = os.Stderr
@@ -191,7 +186,7 @@ fmt.Println("Registration managed.")
 
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
-					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzAddr, cmdSlice[0])
+					dataId, err := pzsvc.IngestTiff(outTiff, runId, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -202,7 +197,7 @@ fmt.Println("Registration managed.")
 
 				for i, outTxt := range outTxtSlice {
 					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
-					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzAddr, cmdSlice[0])
+					dataId, err := pzsvc.IngestTxt(outTxt, runId, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -213,7 +208,7 @@ fmt.Println("Registration managed.")
 
 				for i, outGeoJ := range outGeoJSlice {
 					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
-					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzAddr, cmdSlice[0])
+					dataId, err := pzsvc.IngestGeoJson(outGeoJ, runId, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -238,16 +233,7 @@ fmt.Println("Registration managed.")
 				}
 
 				fmt.Fprintf(w, outStr)
-
-				err = os.Chdir("..")
-				if err != nil {
-					fmt.Fprintf(w, err.Error())
-				}
-
-				err = os.RemoveAll("./" + runId)
-				if err != nil {
-					fmt.Fprintf(w, err.Error())
-				}
+				
 			}
 		case "/description":
 			if configObj.Description == "" {
