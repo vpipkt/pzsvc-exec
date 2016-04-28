@@ -30,37 +30,65 @@ import (
 )
 
 type ConfigType struct {
-	CliCmd string
-	PzJobAddr string
-	PzFileAddr string
+	CliCmd      string
+	PzAddr      string
+	SvcName     string
+	Url         string
+	Port        int
+	Description string
+	Attributes  map[string]string
 }
 
 type OutStruct struct {
-    InFiles map[string] string
-    OutFiles map[string] string
+	InFiles    map[string]string
+	OutFiles   map[string]string
 	ProgReturn string
 }
 
 func main() {
 
+	if len(os.Args) < 2 {
+		fmt.Println("error: Insufficient parameters.  You must specify a config file.")
+		return
+	}
+	
 	// first argument after the base call should be the path to the config file.
 	// ReadFile returns the contents of the file as a byte buffer.
 	configBuf, err := ioutil.ReadFile(os.Args[1])
-	if err != nil { fmt.Println("error:", err) }
+	if err != nil {
+		fmt.Println("error:", err)
+	}
 
 	var configObj ConfigType
 	err = json.Unmarshal(configBuf, &configObj)
-	if err != nil { fmt.Println("error:", err) }
+	if err != nil {
+		fmt.Println("error:", err)
+	}
 
-	//- check that config file data is complete.  Checks other dependency requirements (if any)
-	//- register on Pz
+	if configObj.Port <= 0 {
+		configObj.Port = 8080
+	}
+
+	portStr := ":" + strconv.Itoa(configObj.Port)
+
+	if configObj.SvcName != "" && configObj.PzAddr != "" {
+		fullUrl := configObj.Url + portStr
+fmt.Println("About to manage registration.")
+		err = pzsvc.ManageRegistration(configObj.SvcName, configObj.Description, fullUrl, configObj.PzAddr)
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+fmt.Println("Registration managed.")
+
+	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
-		switch r.URL.Path{
-			case "/":
-				fmt.Fprintf(w, "hello.")
-			case "/execute": {
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprintf(w, "hello.")
+		case "/execute":
+			{
 
 				var cmdParam string
 				var inFileStr string
@@ -69,7 +97,7 @@ func main() {
 				var outGeoJStr string
 				var usePz string
 
-// might be time to start looking into that "help" thing.
+				// might be time to start looking into that "help" thing.
 
 				if r.Method == "GET" {
 					cmdParam = r.URL.Query().Get("cmd")
@@ -97,105 +125,143 @@ func main() {
 				outGeoJSlice := splitOrNil(outGeoJStr, ",")
 
 				var output OutStruct
+
+				uuid, err := exec.Command("uuidgen").Output()
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+
+				runId := string(uuid)
+
+				err = os.Mkdir("./"+runId, 0777)
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+				defer os.RemoveAll("./" + runId)
+
+				err = os.Chmod("./"+runId, 0777)
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
 				
-				if len(inFileSlice) > 0 { output.InFiles = make(map[string]string) }
-				if len(outTiffSlice) + len(outTxtSlice) + len(outGeoJSlice)  > 0 {
+				if len(inFileSlice) > 0 {
+					output.InFiles = make(map[string]string)
+				}
+				if len(outTiffSlice)+len(outTxtSlice)+len(outGeoJSlice) > 0 {
 					output.OutFiles = make(map[string]string)
 				}
 
-				for _, inFile := range inFileSlice {
+				for i, inFile := range inFileSlice {
 
-					fName, err := pzsvc.Download(inFile, configObj.PzFileAddr)
+					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
+					fname, err := pzsvc.Download(inFile, runId, configObj.PzAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+						fmt.Printf("Download failed.  %s", err.Error())
 					} else {
-						output.InFiles[inFile] = fName
+						output.InFiles[inFile] = fname
+						fmt.Printf("Successfully downloaded %s.", fname)
 					}
 				}
-				
+
 				if len(cmdSlice) == 0 {
 					fmt.Fprintf(w, `No cmd specified in config file.  Please provide "cmd" param.`)
 					break
 				}
 
-				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
+				fmt.Printf("Executing \"%s\".\n", configObj.CliCmd+" "+cmdParam)
 
+				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
+				clc.Dir = runId
 				var b bytes.Buffer
 				clc.Stdout = &b
 				clc.Stderr = os.Stderr
 
 				err = clc.Run()
-				if err != nil { fmt.Fprintf(w, err.Error()) }
-
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+				fmt.Printf("Program output: %s\n", b.String())
 				output.ProgReturn = b.String()
 
-				for _, outTiff := range outTiffSlice {
-					dataId, err := pzsvc.IngestTiff(outTiff, configObj.PzJobAddr, cmdSlice[0])
+				for i, outTiff := range outTiffSlice {
+					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
+					dataId, err := pzsvc.IngestTiff(outTiff, runId, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outTiff] = dataId
 					}
 				}
 
-				for _, outTxt := range outTxtSlice {
-					dataId, err := pzsvc.IngestTxt(outTxt, configObj.PzJobAddr, cmdSlice[0])
+				for i, outTxt := range outTxtSlice {
+					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
+					dataId, err := pzsvc.IngestTxt(outTxt, runId, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outTxt] = dataId
 					}
 				}
 
-				for _, outGeoJ := range outGeoJSlice {
-					dataId, err := pzsvc.IngestGeoJson(outGeoJ, configObj.PzJobAddr, cmdSlice[0])
+				for i, outGeoJ := range outGeoJSlice {
+					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
+					dataId, err := pzsvc.IngestGeoJson(outGeoJ, runId, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
+						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outGeoJ] = dataId
 					}
 				}
 
 				outBuf, err := json.Marshal(output)
-				if err != nil { fmt.Fprintf(w, err.Error()) }
-				
+				if err != nil {
+					fmt.Fprintf(w, err.Error())
+				}
+
 				outStr := string(outBuf)
 
 				if usePz != "" {
 					outStr = strconv.QuoteToASCII(outStr)
-					outStr = fmt.Sprintf ( `{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, outStr )
+					// TODO: clean this up a bit, and possibly move it back into
+					// the support function.
+					// - possibly include metadata to help on results searches?  Talk with Marge on where/how to put it in.
+					outStr = fmt.Sprintf(`{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, outStr)
 				}
 
 				fmt.Fprintf(w, outStr)
 				
 			}
-			case "/help":
-				help(w)
-			default:
-				other(w)
+		case "/description":
+			if configObj.Description == "" {
+				fmt.Fprintf(w, "No description defined")
+			} else {
+				fmt.Fprintf(w, configObj.Description)
+			}
+		case "/attributes":
+			if configObj.Attributes == nil {
+				fmt.Fprintf(w, "{ }")
+			} else {
+				// convert attributes back into Json
+				// this might require specifying the interface a bit better.
+				//					fmt.Fprintf(w, configObj.Attributes)
+			}
+		case "/help":
+			fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
+		default:
+			fmt.Fprintf(w, "Command undefined.  Try help?\n")
 		}
 	})
 
-// might want to update Port number at some point - possibly to os.Getenve(“PORT”),
-// possibly to some other defined port - talk with the Pz folks over what their
-// system is
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(portStr, nil))
 }
 
 func splitOrNil(inString, knife string) []string {
-fmt.Printf("SplitOrNull: \"%s\", split by \"%s\".\n", inString, knife)
 	if inString == "" {
 		return nil
 	}
 	return strings.Split(inString, knife)
 }
-
-
-func other(w http.ResponseWriter) {
-	fmt.Fprintf(w, "Command undefined.  Try help?\n")
-}
-
-func help(w http.ResponseWriter) {
-	fmt.Fprintf(w, "We're sorry, help is not yet implemented\n")
-}
-
