@@ -46,6 +46,17 @@ type OutStruct struct {
 	ProgReturn string
 }
 
+type PzCont struct {
+	Type		string
+	Content		string
+	MimeType	string
+}
+
+type PzWrap struct {
+	DataType	PzCont
+	metadata	map[string]string
+}
+
 func main() {
 
 	if len(os.Args) < 2 {
@@ -223,11 +234,21 @@ fmt.Println("Registration managed.")
 				outStr := string(outBuf)
 
 				if usePz != "" {
-					outStr = strconv.QuoteToASCII(outStr)
-					// TODO: clean this up a bit, and possibly move it back into
-					// the support function.
-					// - possibly include metadata to help on results searches?  Talk with Marge on where/how to put it in.
-					outStr = fmt.Sprintf(`{ "dataType": { "type": "text", "content": "%s" "mimeType": "text/plain" }, "metadata": {} }`, outStr)
+					var cont PzCont
+					var wrap PzWrap
+					
+					cont.Type = "text"
+					cont.Content = outStr
+					cont.MimeType = "text/plain"
+					
+					wrap.DataType = cont
+					
+					outBuf, err := json.Marshal(wrap)
+					if err != nil {
+						fmt.Fprintf(w, err.Error())
+					}
+
+					outStr = string(outBuf)
 				}
 
 				fmt.Fprintf(w, outStr)
