@@ -276,7 +276,7 @@ func RegisterSvc(svcName, svcDesc, svcUrl, pzAddr string) error {
 
 	// TODO: add customizable metadata once the inputs are stabilized
 
-	jsonStr := fmt.Sprintf(`{ "inputs": [], "outputs": [], "url": "%s", "resourceMetadata": { "name": "%s", "description": "%s", "method": "POST" } }`, svcUrl, svcName, svcDesc)
+	jsonStr := fmt.Sprintf(`{ "inputs": [], "outputs": [], "url": "%s/execute", "resourceMetadata": { "name": "%s", "description": "%s", "method": "POST" } }`, svcUrl, svcName, svcDesc)
 fmt.Println(jsonStr)
 	_, err := submitSinglePart("POST", jsonStr, pzAddr + "/service")
 	if err != nil {
@@ -287,7 +287,7 @@ fmt.Println(jsonStr)
 }
 
 func UpdateSvc(svcName, svcId, svcDesc, svcUrl, pzAddr string) error {
-	jsonStr := fmt.Sprintf(`{ "serviceId": "%s", "url": "%s", "resourceMetadata": { "name": "%s", "description": "%s", "method": "POST" } }`, svcId, svcUrl, svcName, svcDesc)
+	jsonStr := fmt.Sprintf(`{ "serviceId": "%s", "url": "%s/execute", "resourceMetadata": { "name": "%s", "description": "%s", "method": "POST" } }`, svcId, svcUrl, svcName, svcDesc)
 	
 	_, err := submitSinglePart("PUT", jsonStr, pzAddr + "/service/" + svcId)
 	if err != nil {
