@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+    "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -125,12 +126,10 @@ fmt.Println("Registration managed.")
 
 				var output OutStruct
 
-				uuid, err := exec.Command("uuidgen").Output()
+				runId, err := psuUuid()
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
-
-				runId := string(uuid)
 
 				err = os.Mkdir("./"+runId, 0777)
 				if err != nil {
@@ -263,4 +262,15 @@ func splitOrNil(inString, knife string) []string {
 		return nil
 	}
 	return strings.Split(inString, knife)
+}
+
+func psuUuid() (string, error) {
+
+    b := make([]byte, 16)
+    _, err := rand.Read(b)
+    if err != nil {
+        return "", err
+    }
+
+    return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
 }
