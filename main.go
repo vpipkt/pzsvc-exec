@@ -72,9 +72,8 @@ func main() {
 	portStr := ":" + strconv.Itoa(configObj.Port)
 
 	if configObj.SvcName != "" && configObj.PzAddr != "" {
-		fullUrl := configObj.Url + portStr
 fmt.Println("About to manage registration.")
-		err = pzsvc.ManageRegistration(configObj.SvcName, configObj.Description, fullUrl, configObj.PzAddr)
+		err = pzsvc.ManageRegistration(configObj.SvcName, configObj.Description, configObj.Url, configObj.PzAddr)
 		if err != nil {
 			fmt.Println("error:", err)
 		}
