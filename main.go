@@ -16,7 +16,7 @@ package main
 
 import (
 	"bytes"
-    "crypto/rand"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -30,30 +30,31 @@ import (
 	"github.com/venicegeo/pzsvc-exec/pzsvc"
 )
 
-type ConfigType struct {
+type configType struct {
 	CliCmd      string
 	PzAddr      string
 	SvcName     string
-	Url         string
+	URL         string
 	Port        int
-	Description string
-	Attributes  map[string]string
+	Description	string
+	ImageReqs	map[string]string
+	Attributes	map[string]string
 }
 
-type OutStruct struct {
-	InFiles    map[string]string
-	OutFiles   map[string]string
-	ProgReturn string
+type outStruct struct {
+	InFiles		map[string]string
+	OutFiles	map[string]string
+	ProgReturn	string
 }
 
-type PzCont struct {
+type pzCont struct {
 	Type		string
 	Content		string
 	MimeType	string
 }
 
-type PzWrap struct {
-	DataType	PzCont
+type pzWrap struct {
+	DataType	pzCont
 	metadata	map[string]string
 }
 
@@ -63,7 +64,7 @@ func main() {
 		fmt.Println("error: Insufficient parameters.  You must specify a config file.")
 		return
 	}
-	
+
 	// first argument after the base call should be the path to the config file.
 	// ReadFile returns the contents of the file as a byte buffer.
 	configBuf, err := ioutil.ReadFile(os.Args[1])
@@ -71,7 +72,7 @@ func main() {
 		fmt.Println("error:", err)
 	}
 
-	var configObj ConfigType
+	var configObj configType
 	err = json.Unmarshal(configBuf, &configObj)
 	if err != nil {
 		fmt.Println("error:", err)
@@ -84,12 +85,16 @@ func main() {
 	portStr := ":" + strconv.Itoa(configObj.Port)
 
 	if configObj.SvcName != "" && configObj.PzAddr != "" {
-fmt.Println("About to manage registration.")
-		err = pzsvc.ManageRegistration(configObj.SvcName, configObj.Description, configObj.Url, configObj.PzAddr)
+		fmt.Println("About to manage registration.")
+		err = pzsvc.ManageRegistration(	configObj.SvcName,
+										configObj.Description,
+										configObj.URL,
+										configObj.PzAddr,
+										configObj.ImageReqs )
 		if err != nil {
-			fmt.Println("error:", err)
+			fmt.Println("error:", err.Error())
 		}
-fmt.Println("Registration managed.")
+		fmt.Println("Registration managed.")
 
 	}
 
@@ -135,24 +140,24 @@ fmt.Println("Registration managed.")
 				outTxtSlice := splitOrNil(outTxtStr, ",")
 				outGeoJSlice := splitOrNil(outGeoJStr, ",")
 
-				var output OutStruct
+				var output outStruct
 
-				runId, err := psuUuid()
+				runID, err := psuUUID()
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
 
-				err = os.Mkdir("./"+runId, 0777)
+				err = os.Mkdir("./"+runID, 0777)
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
-				defer os.RemoveAll("./" + runId)
+				defer os.RemoveAll("./" + runID)
 
-				err = os.Chmod("./"+runId, 0777)
+				err = os.Chmod("./"+runID, 0777)
 				if err != nil {
 					fmt.Fprintf(w, err.Error())
 				}
-				
+
 				if len(inFileSlice) > 0 {
 					output.InFiles = make(map[string]string)
 				}
@@ -163,7 +168,7 @@ fmt.Println("Registration managed.")
 				for i, inFile := range inFileSlice {
 
 					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
-					fname, err := pzsvc.Download(inFile, runId, configObj.PzAddr)
+					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 						fmt.Printf("Download failed.  %s", err.Error())
@@ -181,7 +186,7 @@ fmt.Println("Registration managed.")
 				fmt.Printf("Executing \"%s\".\n", configObj.CliCmd+" "+cmdParam)
 
 				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
-				clc.Dir = runId
+				clc.Dir = runID
 				var b bytes.Buffer
 				clc.Stdout = &b
 				clc.Stderr = os.Stderr
@@ -195,34 +200,34 @@ fmt.Println("Registration managed.")
 
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
-					dataId, err := pzsvc.IngestTiff(outTiff, runId, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
-						output.OutFiles[outTiff] = dataId
+						output.OutFiles[outTiff] = dataID
 					}
 				}
 
 				for i, outTxt := range outTxtSlice {
 					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
-					dataId, err := pzsvc.IngestTxt(outTxt, runId, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
-						output.OutFiles[outTxt] = dataId
+						output.OutFiles[outTxt] = dataID
 					}
 				}
 
 				for i, outGeoJ := range outGeoJSlice {
 					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
-					dataId, err := pzsvc.IngestGeoJson(outGeoJ, runId, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestGeoJson(outGeoJ, runID, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
-						output.OutFiles[outGeoJ] = dataId
+						output.OutFiles[outGeoJ] = dataID
 					}
 				}
 
@@ -234,15 +239,15 @@ fmt.Println("Registration managed.")
 				outStr := string(outBuf)
 
 				if usePz != "" {
-					var cont PzCont
-					var wrap PzWrap
-					
+					var cont pzCont
+					var wrap pzWrap
+
 					cont.Type = "text"
 					cont.Content = outStr
 					cont.MimeType = "text/plain"
-					
+
 					wrap.DataType = cont
-					
+
 					outBuf, err := json.Marshal(wrap)
 					if err != nil {
 						fmt.Fprintf(w, err.Error())
@@ -252,7 +257,7 @@ fmt.Println("Registration managed.")
 				}
 
 				fmt.Fprintf(w, outStr)
-				
+
 			}
 		case "/description":
 			if configObj.Description == "" {
@@ -285,13 +290,13 @@ func splitOrNil(inString, knife string) []string {
 	return strings.Split(inString, knife)
 }
 
-func psuUuid() (string, error) {
+func psuUUID() (string, error) {
 
-    b := make([]byte, 16)
-    _, err := rand.Read(b)
-    if err != nil {
-        return "", err
-    }
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
 
-    return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
 }

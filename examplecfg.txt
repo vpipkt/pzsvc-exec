@@ -2,9 +2,13 @@
     "CliCmd":"ossim-cli",
     "PzAddr":"https://pz-gateway.stage.geointservices.io",
     "SvcName":"OSSIM client",
-    "Url":"https://pz-svcs-prevgen.stage.geointservices.io/ossimcli",
+    "URL":"https://pzsvc-exec.stage.geointservices.io",
     "Port":8080,
     "Description":"The OSSIM shoreline-determination algorithm, served via piazza",
+    "ImageReqs":{
+        "CloudCover":"<10%",
+        "Shoreline":"True"
+    },
     "Attributes":{
         "Interface":"pzsvc-exec/ossim",
         "MaxSize":"2G",
