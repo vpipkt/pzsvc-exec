@@ -185,8 +185,26 @@ func main() {
 
 				fmt.Printf("Executing \"%s\".\n", configObj.CliCmd+" "+cmdParam)
 
+fmt.Println(fmt.Sprintf("./%s", cmdSlice[0]))
+
+				// we're callign this from inside a temporary subfolder.  If the
+				// program called exists inside the initial pzsvc-exec folder, that's
+				// probably where it's called from, and we need to acccess it directly.
+				_, err = os.Stat(fmt.Sprintf("./%s", cmdSlice[0]))
+				if err == nil || !(os.IsNotExist(err)){
+fmt.Println("It's here!  better path it.")
+					// ie, if there's a file in the start folder named the same thing
+					// as the base command
+					cmdSlice[0] = ("../" + cmdSlice[0])
+				} else {
+fmt.Println("Some error: " + err.Error())
+				}
+			
+fmt.Println("Running: " + cmdSlice[0])
+
 				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
 				clc.Dir = runID
+
 				var b bytes.Buffer
 				clc.Stdout = &b
 				clc.Stderr = os.Stderr

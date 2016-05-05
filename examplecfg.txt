@@ -6,8 +6,8 @@
     "Port":8080,
     "Description":"The OSSIM shoreline-determination algorithm, served via piazza",
     "ImageReqs":{
-        "CloudCover":"<10%",
-        "Shoreline":"True"
+        "CloudCover":"10%",
+        "Bands":"3,6"
     },
     "Attributes":{
         "Interface":"pzsvc-exec/ossim",
