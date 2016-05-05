@@ -2,7 +2,27 @@
 
 "pzsvc-exec" is designed to serve command-line programs to Piazza, based on the contents of a config file.
 
-## Installing and running
+## Contents
+
+- How and Why: Useful background information and overview.
+- Installing and Running: You need this if you want to run/administrate a pzsvc-exec instance
+- Config File Format: You need this if you want to have any control over the instance you're running.  May be useful for understanding how pzsvc-exec works.
+- Using: You need this if you want to access an existing instance of pzsvc-exec with any control at all.
+-- Example http calls: examples that put the "using" section into practice.
+
+## What and Why
+
+Pzsvc-exec is at its most basic level something that publishes the exec() call as a service to Piazza (with lots of useful bells and whistles).
+
+When it is launched, it is given a config file, from which it derives all persistent information.  If the config file allows, it will start by automatically registering itself as a service to a specified Piazza instance.  Regardless, it will then begin to serve.
+
+When a request comes in, it has up to three parts - a set of files to download, a command string to execute, and a set of files to upload.  It will generate a temporary folder, download the files into the folder, execute its command in the folder, upload the files from the folder, reply to the service request, and then delete the folder.  The command it attempts to execute is the `CliCmd` parameter from the config file, with the `cmd` from the service request appended on.  The reply to the service request will take the form of a Json string, and contains a list of the files downloaded, a list of the files uploaded, and the stdout return of command executed.
+
+The idea of this meta-service is to simplify the task of launch and maintenance on Pz services.  If you have execute access to an algorithm or similar program, its meaningful inputs consist of files and a command-line call, and its meaningful outputs consist of files, stderr, and stdout, you can provide it as a Piazza service.  All you should have to do is fill out the config file properly (and have a Piazza instance to connect to) and pzsvc-exec will take care of the rest.
+
+As a secondary benefit, pzsvc-exec will be kept current with the existing Piazza interface, meaning that it can serve as living example code for those of you who find its limitations overly constraining.  For those of you writing in Go, it can even be used as a library.
+
+## Installing and Running
 
 Make sure you have Go installed on you machine, and an appropriate GOPATH (environment variable) set.
 
@@ -51,7 +71,7 @@ outTxts: as with outTiffs, but text files.  Actual extension doesn't matter as l
 
 outGeoJson: as with outTiffs and outTxts, but with GeoJson files.  Must be in proper GeoJson format.
 
-## Example http calls
+### Example http calls
 
 `http://<address:port>/execute`
 - No uploads, no downloads, direct access rather than through piazza, just running whatever command CliCmd has to offer

@@ -29,9 +29,17 @@ import (
 	"time"
 )
 
+func locString(subFold, fname string ) string {
+	if subFold == "" {
+		return fmt.Sprintf(`./%s`, fname)
+	} else {
+		return fmt.Sprintf(`./%s/%s`, subFold, fname)
+	}	
+}
+
 // Sends a multi-part POST call, including optional uploaded file,
 // and returns the response.  Primarily intended to support Ingest calls.
-func submitMultipart(bodyStr, runId, address, upload string) (*http.Response, error) {
+func submitMultipart(bodyStr, subFold, address, upload string) (*http.Response, error) {
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -42,7 +50,8 @@ func submitMultipart(bodyStr, runId, address, upload string) (*http.Response, er
 	}
 
 	if upload != "" {
-		file, err := os.Open(fmt.Sprintf(`./%s`, upload))
+		
+		file, err := os.Open(locString(subFold, upload))
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +91,7 @@ func submitMultipart(bodyStr, runId, address, upload string) (*http.Response, er
 }
 
 // Downloads a file from Pz using the file access API
-func Download(dataId, runId, pzAddr string) (string, error) {
+func Download(dataId, subFold, pzAddr string) (string, error) {
 
 	resp, err := http.Get(pzAddr + "/file/" + dataId)
 	if resp != nil {
@@ -99,9 +108,8 @@ func Download(dataId, runId, pzAddr string) (string, error) {
 	if filename == "" {
 		filename = "dummy.txt"
 	}
-	filepath := fmt.Sprintf(`./%s/%s`, runId, filename)
-
-	out, err := os.Create(filepath)
+	
+	out, err := os.Create(locString(subFold, filename))
 	if err != nil {
 		return "", err
 	}
@@ -181,14 +189,14 @@ func getDataId(jobId, pzAddr string) (string, error) {
 
 // Handles the Pz Ingest process.  Will upload file to Pz and return the
 // resulting DataId.
-func ingestMultipart(bodyStr, runId, pzAddr, filename string) (string, error) {
+func ingestMultipart(bodyStr, subFold, pzAddr, filename string) (string, error) {
 
 	type jobResp struct {
 		Type  string
 		JobId string
 	}
 
-	resp, err := submitMultipart(bodyStr, runId, (pzAddr + "/job"), filename)
+	resp, err := submitMultipart(bodyStr, subFold, (pzAddr + "/job"), filename)
 	if err != nil {
 		return "", err
 	}
@@ -212,29 +220,30 @@ func ingestMultipart(bodyStr, runId, pzAddr, filename string) (string, error) {
 }
 
 // Constructs the ingest call for a GeoTIFF
-func IngestTiff(filename, runId, pzAddr, cmdName string) (string, error) {
+func IngestTiff(filename, subFold, pzAddr, cmdName string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "raster" }, "metadata": { "name": "%s", "description": "raster uploaded by pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, filename, cmdName)
 
-	return ingestMultipart(jsonStr, runId, pzAddr, filename)
+	return ingestMultipart(jsonStr, subFold, pzAddr, filename)
 }
 
 // Constructs the ingest call for a GeoJson
-func IngestGeoJson(filename, runId, pzAddr, cmdName string) (string, error) {
+func IngestGeoJson(filename, subFold, pzAddr, cmdName string) (string, error) {
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" : { "dataType": { "type": "geojson" }, "metadata": { "name": "%s", "description": "GeoJson uploaded by pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, filename, cmdName)
 
-	return ingestMultipart(jsonStr, runId, pzAddr, filename)
+	return ingestMultipart(jsonStr, subFold, pzAddr, filename)
 }
 
 // Constructs the ingest call for standard text.
-func IngestTxt(filename, runId, pzAddr, cmdName string) (string, error) {
-	textblock, err := ioutil.ReadFile(fmt.Sprintf(`./%s/%s`, runId, filename))
+func IngestTxt(filename, subFold, pzAddr, cmdName string) (string, error) {
+	
+	textblock, err := ioutil.ReadFile(locString(subFold, filename))
 	if err != nil {
 		return "", err
 	}
 
 	jsonStr := fmt.Sprintf(`{ "userName": "my-api-key-38n987", "jobType": { "type": "ingest", "host": "true", "data" :{ "dataType": { "type": "text", "mimeType": "application/text", "content": "%s" }, "metadata": { "name": "%s", "description": "text output from pzsvc-exec for %s.", "classType": { "classification": "unclassified" } } } } }`, strconv.QuoteToASCII(string(textblock)), filename, cmdName)
 
-	return ingestMultipart(jsonStr, runId, pzAddr, "")
+	return ingestMultipart(jsonStr, "", pzAddr, "")
 }
