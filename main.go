@@ -45,6 +45,7 @@ type outStruct struct {
 	InFiles		map[string]string
 	OutFiles	map[string]string
 	ProgReturn	string
+	Error		string
 }
 
 type pzCont struct {
@@ -88,7 +89,7 @@ func main() {
 		fmt.Println("About to manage registration.")
 		err = pzsvc.ManageRegistration(	configObj.SvcName,
 										configObj.Description,
-										configObj.URL,
+										configObj.URL + "/execute",
 										configObj.PzAddr,
 										configObj.ImageReqs )
 		if err != nil {
@@ -144,18 +145,18 @@ func main() {
 
 				runID, err := psuUUID()
 				if err != nil {
-					fmt.Fprintf(w, err.Error())
+					addErr(&output.Error, err.Error())
 				}
 
 				err = os.Mkdir("./"+runID, 0777)
 				if err != nil {
-					fmt.Fprintf(w, err.Error())
+					addErr(&output.Error, err.Error())
 				}
 				defer os.RemoveAll("./" + runID)
 
 				err = os.Chmod("./"+runID, 0777)
 				if err != nil {
-					fmt.Fprintf(w, err.Error())
+					addErr(&output.Error, err.Error())
 				}
 
 				if len(inFileSlice) > 0 {
@@ -170,7 +171,7 @@ func main() {
 					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
 					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr)
 					if err != nil {
-						fmt.Fprintf(w, err.Error())
+						addErr(&output.Error, err.Error())
 						fmt.Printf("Download failed.  %s", err.Error())
 					} else {
 						output.InFiles[inFile] = fname
@@ -179,28 +180,21 @@ func main() {
 				}
 
 				if len(cmdSlice) == 0 {
-					fmt.Fprintf(w, `No cmd specified in config file.  Please provide "cmd" param.`)
+					addErr(&output.Error, `No cmd specified in config file.  Please provide "cmd" param.`)
 					break
 				}
 
 				fmt.Printf("Executing \"%s\".\n", configObj.CliCmd+" "+cmdParam)
 
-fmt.Println(fmt.Sprintf("./%s", cmdSlice[0]))
-
-				// we're callign this from inside a temporary subfolder.  If the
+				// we're calling this from inside a temporary subfolder.  If the
 				// program called exists inside the initial pzsvc-exec folder, that's
 				// probably where it's called from, and we need to acccess it directly.
 				_, err = os.Stat(fmt.Sprintf("./%s", cmdSlice[0]))
 				if err == nil || !(os.IsNotExist(err)){
-fmt.Println("It's here!  better path it.")
 					// ie, if there's a file in the start folder named the same thing
 					// as the base command
 					cmdSlice[0] = ("../" + cmdSlice[0])
-				} else {
-fmt.Println("Some error: " + err.Error())
 				}
-			
-fmt.Println("Running: " + cmdSlice[0])
 
 				clc := exec.Command(cmdSlice[0], cmdSlice[1:]...)
 				clc.Dir = runID
@@ -211,7 +205,7 @@ fmt.Println("Running: " + cmdSlice[0])
 
 				err = clc.Run()
 				if err != nil {
-					fmt.Fprintf(w, err.Error())
+					addErr(&output.Error, err.Error())
 				}
 				fmt.Printf("Program output: %s\n", b.String())
 				output.ProgReturn = b.String()
@@ -231,7 +225,7 @@ fmt.Println("Running: " + cmdSlice[0])
 					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
 					dataID, err := pzsvc.IngestTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
-						fmt.Fprintf(w, err.Error())
+						addErr(&output.Error, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outTxt] = dataID
@@ -242,7 +236,7 @@ fmt.Println("Running: " + cmdSlice[0])
 					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
 					dataID, err := pzsvc.IngestGeoJson(outGeoJ, runID, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
-						fmt.Fprintf(w, err.Error())
+						addErr(&output.Error, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outGeoJ] = dataID
@@ -251,11 +245,12 @@ fmt.Println("Running: " + cmdSlice[0])
 
 				outBuf, err := json.Marshal(output)
 				if err != nil {
-					fmt.Fprintf(w, err.Error())
+					addErr(&output.Error, err.Error())
 				}
 
 				outStr := string(outBuf)
 
+				// this isn't a thing now, but might again become a thing later.
 				if usePz != "" {
 					var cont pzCont
 					var wrap pzWrap
@@ -317,4 +312,12 @@ func psuUUID() (string, error) {
 	}
 
 	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+}
+
+func addErr (thisErr *string, nextErr string) {
+	if *thisErr == "" {
+		*thisErr = nextErr
+	} else {
+		*thisErr = *thisErr + ";  " + nextErr
+	}
 }

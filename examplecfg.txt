@@ -7,7 +7,8 @@
     "Description":"The OSSIM shoreline-determination algorithm, served via piazza",
     "ImageReqs":{
         "CloudCover":"10%",
-        "Bands":"3,6"
+        "Bands":"3,6",
+        "Coastline":"Yes"
     },
     "Attributes":{
         "Interface":"pzsvc-exec/ossim",
