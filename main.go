@@ -315,5 +315,5 @@ func printJson (w http.ResponseWriter, output interface{}) {
 	}
 
 	outStr := string(outBuf)
-	fmt.Fprintf(w, outStr)
+	fmt.Fprintf(w, "%s", outStr)
 }
