@@ -59,7 +59,7 @@ Attributes: A block of freeform Json for you to set additional descriptive attri
 
 ## Using
 
-Intended use is through the Piazza service, though it can also be used as a standalone service.  Currently accepts both GET and POST calls, with identical parameters.  Actually using the service requires that you call the "execute" endpoint of whatever base the service is called on (example: "http://localhost:8080/execute").  Beyond that, valid and accepted parameters (query parameters for Get, form parameters for POST) are as follows:
+Intended use is through the Piazza service, though it can also be used as a standalone service.  Currently accepts both GET and POST calls, with identical parameters.  Actually using the service requires that you call the "execute" endpoint of whatever base the service is called on (example: "http://localhost:8080/execute", if running locally on port 8080).  Beyond that, valid and accepted parameters (query parameters for Get, form parameters for POST) are as follows:
 
 cmd: The second part of the exec call (following CliCmd).  Additional commands after the first are not supported.  Allows the user some control over the process by influencing input params.
 

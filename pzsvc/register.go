@@ -121,6 +121,7 @@ func ManageRegistration(svcName, svcDesc, svcUrl, pzAddr string, imgReq map[stri
 		}
 		imgReq = newImgReq
 	}
+//TODO: imgReq may not be generic enough.  Look into/reconsider.
 	
 	fmt.Println("Finding")
 	svcId, err := FindMySvc(svcName, pzAddr)

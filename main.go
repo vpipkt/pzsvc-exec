@@ -196,8 +196,8 @@ func main() {
 				if err != nil {
 					output.Errors = append(output.Errors, err.Error())
 				}
-				fmt.Printf("Program output: %s\n", b.String())
-				output.ProgReturn = b.String()
+				fmt.Printf("Program output: %+q\n", b.String())
+				output.ProgReturn = fmt.Sprintf("%+q", b.String())
 
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
@@ -259,9 +259,9 @@ func main() {
 
 					wrap.DataType = cont
 
-					printJson(wrap, w)
+					printJson(w, wrap)
 				} else {
-					printJson(output, w)
+					printJson(w, output)
 				}
 
 
@@ -276,9 +276,7 @@ func main() {
 			if configObj.Attributes == nil {
 				fmt.Fprintf(w, "{ }")
 			} else {
-				// convert attributes back into Json
-				// this might require specifying the interface a bit better.
-				//					fmt.Fprintf(w, configObj.Attributes)
+				printJson(w, configObj.Attributes)
 			}
 		case "/help":
 			fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
@@ -298,7 +296,6 @@ func splitOrNil(inString, knife string) []string {
 }
 
 func psuUUID() (string, error) {
-
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -308,13 +305,12 @@ func psuUUID() (string, error) {
 	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
 }
 
-func printJson (output interface{}, w http.ResponseWriter) {
+func printJson (w http.ResponseWriter, output interface{}) {
+	outBuf, err := json.Marshal(output)
+	if err != nil {
+		fmt.Fprintf(w, `{"Errors":"Json marshalling failure.  Data not reportable."}`)
+	}
 
-				outBuf, err := json.Marshal(output)
-				if err != nil {
-					fmt.Fprintf(w, `{"Errors":"Json marshalling failure.  Data not reportable."}`)
-				}
-
-				outStr := string(outBuf)
-				fmt.Fprintf(w, outStr)
+	outStr := string(outBuf)
+	fmt.Fprintf(w, outStr)
 }
