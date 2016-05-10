@@ -196,7 +196,7 @@ func main() {
 				if err != nil {
 					output.Errors = append(output.Errors, err.Error())
 				}
-				output.ProgReturn = b.String())
+				output.ProgReturn = b.String()
 				output.ProgReturn = strings.Replace(output.ProgReturn, "\r\n", "\n", -1)
 				output.ProgReturn = strings.Replace(output.ProgReturn, "\r", "\n", -1)
 				
