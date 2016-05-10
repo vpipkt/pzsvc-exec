@@ -45,18 +45,7 @@ type outStruct struct {
 	InFiles		map[string]string
 	OutFiles	map[string]string
 	ProgReturn	string
-	Error		string
-}
-
-type pzCont struct {
-	Type		string
-	Content		string
-	MimeType	string
-}
-
-type pzWrap struct {
-	DataType	pzCont
-	metadata	map[string]string
+	Errors		[]string
 }
 
 func main() {
@@ -145,18 +134,18 @@ func main() {
 
 				runID, err := psuUUID()
 				if err != nil {
-					addErr(&output.Error, err.Error())
+					output.Errors = append(output.Errors, err.Error())
 				}
 
 				err = os.Mkdir("./"+runID, 0777)
 				if err != nil {
-					addErr(&output.Error, err.Error())
+					output.Errors = append(output.Errors, err.Error())
 				}
 				defer os.RemoveAll("./" + runID)
 
 				err = os.Chmod("./"+runID, 0777)
 				if err != nil {
-					addErr(&output.Error, err.Error())
+					output.Errors = append(output.Errors, err.Error())
 				}
 
 				if len(inFileSlice) > 0 {
@@ -171,7 +160,7 @@ func main() {
 					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
 					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr)
 					if err != nil {
-						addErr(&output.Error, err.Error())
+						output.Errors = append(output.Errors,err.Error())
 						fmt.Printf("Download failed.  %s", err.Error())
 					} else {
 						output.InFiles[inFile] = fname
@@ -180,7 +169,7 @@ func main() {
 				}
 
 				if len(cmdSlice) == 0 {
-					addErr(&output.Error, `No cmd specified in config file.  Please provide "cmd" param.`)
+					output.Errors = append(output.Errors, `No cmd specified in config file.  Please provide "cmd" param.`)
 					break
 				}
 
@@ -205,10 +194,10 @@ func main() {
 
 				err = clc.Run()
 				if err != nil {
-					addErr(&output.Error, err.Error())
+					output.Errors = append(output.Errors, err.Error())
 				}
-				fmt.Printf("Program output: %s\n", b.String())
-				output.ProgReturn = b.String()
+				fmt.Printf("Program output: %+q\n", b.String())
+				output.ProgReturn = fmt.Sprintf("%+q", b.String())
 
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
@@ -225,7 +214,7 @@ func main() {
 					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
 					dataID, err := pzsvc.IngestTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
-						addErr(&output.Error, err.Error())
+						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outTxt] = dataID
@@ -236,40 +225,45 @@ func main() {
 					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
 					dataID, err := pzsvc.IngestGeoJson(outGeoJ, runID, configObj.PzAddr, cmdSlice[0])
 					if err != nil {
-						addErr(&output.Error, err.Error())
+						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outGeoJ] = dataID
 					}
 				}
 
-				outBuf, err := json.Marshal(output)
-				if err != nil {
-					addErr(&output.Error, err.Error())
-				}
-
-				outStr := string(outBuf)
-
 				// this isn't a thing now, but might again become a thing later.
 				if usePz != "" {
+					
+					type pzCont struct {
+						Type		string
+						Content		string
+						MimeType	string
+					}
+
+					type pzWrap struct {
+						DataType	pzCont
+						metadata	map[string]string
+					}
+										
 					var cont pzCont
 					var wrap pzWrap
-
+					outBuf, err := json.Marshal(output)
+					if err != nil {
+						output.Errors = append(output.Errors, err.Error())
+					}
+				
 					cont.Type = "text"
-					cont.Content = outStr
+					cont.Content = string(outBuf)
 					cont.MimeType = "text/plain"
 
 					wrap.DataType = cont
 
-					outBuf, err := json.Marshal(wrap)
-					if err != nil {
-						fmt.Fprintf(w, err.Error())
-					}
-
-					outStr = string(outBuf)
+					printJson(w, wrap)
+				} else {
+					printJson(w, output)
 				}
 
-				fmt.Fprintf(w, outStr)
 
 			}
 		case "/description":
@@ -282,9 +276,7 @@ func main() {
 			if configObj.Attributes == nil {
 				fmt.Fprintf(w, "{ }")
 			} else {
-				// convert attributes back into Json
-				// this might require specifying the interface a bit better.
-				//					fmt.Fprintf(w, configObj.Attributes)
+				printJson(w, configObj.Attributes)
 			}
 		case "/help":
 			fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
@@ -304,7 +296,6 @@ func splitOrNil(inString, knife string) []string {
 }
 
 func psuUUID() (string, error) {
-
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -314,10 +305,12 @@ func psuUUID() (string, error) {
 	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
 }
 
-func addErr (thisErr *string, nextErr string) {
-	if *thisErr == "" {
-		*thisErr = nextErr
-	} else {
-		*thisErr = *thisErr + ";  " + nextErr
+func printJson (w http.ResponseWriter, output interface{}) {
+	outBuf, err := json.Marshal(output)
+	if err != nil {
+		fmt.Fprintf(w, `{"Errors":"Json marshalling failure.  Data not reportable."}`)
 	}
+
+	outStr := string(outBuf)
+	fmt.Fprintf(w, outStr)
 }
