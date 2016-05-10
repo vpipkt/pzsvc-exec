@@ -196,8 +196,11 @@ func main() {
 				if err != nil {
 					output.Errors = append(output.Errors, err.Error())
 				}
-				fmt.Printf("Program output: %+q\n", b.String())
-				output.ProgReturn = fmt.Sprintf("%+q", b.String())
+				output.ProgReturn = b.String())
+				output.ProgReturn = strings.Replace(output.ProgReturn, "\r\n", "\n", -1)
+				output.ProgReturn = strings.Replace(output.ProgReturn, "\r", "\n", -1)
+				
+				fmt.Printf("Program output: %s\n", output.ProgReturn)
 
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
