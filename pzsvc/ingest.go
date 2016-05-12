@@ -125,27 +125,6 @@ func Download(dataId, subFold, pzAddr string) (string, error) {
 // the resulting DataId.
 func getDataId(jobId, pzAddr string) (string, error) {
 
-	type jobResult struct {
-		Type   string
-		DataId string
-	}
-
-	type jobProg struct {
-		PercentComplete int
-	}
-
-	// the response object for a Check Status call
-	type jobResp struct {
-		Type     string
-		JobId    string
-		Result   jobResult
-		Status   string
-		JobType  string
-		Progress jobProg
-		Message  string
-		Origin   string
-	}
-
 	time.Sleep(1000 * time.Millisecond)
 
 	for i := 0; i < 100; i++ {
@@ -167,7 +146,7 @@ func getDataId(jobId, pzAddr string) (string, error) {
 
 		fmt.Println(respBuf.String())
 
-		var respObj jobResp
+		var respObj JobResp
 		err = json.Unmarshal(respBuf.Bytes(), &respObj)
 		if err != nil {
 			return "", err
@@ -176,7 +155,7 @@ func getDataId(jobId, pzAddr string) (string, error) {
 		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" || respObj.Message == "Job Not Found" {
 			time.Sleep(200 * time.Millisecond)
 		} else if respObj.Status == "Success" {
-			return respObj.Result.DataId, nil
+			return respObj.Result.DataID, nil
 		} else if respObj.Status == "Error" || respObj.Status == "Fail" {
 			return "", errors.New(respObj.Status + ": " + respObj.Message)
 		} else {
@@ -190,11 +169,6 @@ func getDataId(jobId, pzAddr string) (string, error) {
 // Handles the Pz Ingest process.  Will upload file to Pz and return the
 // resulting DataId.
 func ingestMultipart(bodyStr, subFold, pzAddr, filename string) (string, error) {
-
-	type jobResp struct {
-		Type  string
-		JobId string
-	}
 
 	resp, err := submitMultipart(bodyStr, subFold, (pzAddr + "/job"), filename)
 	if err != nil {
@@ -210,13 +184,13 @@ func ingestMultipart(bodyStr, subFold, pzAddr, filename string) (string, error) 
 
 	fmt.Println(respBuf.String())
 
-	var respObj jobResp
+	var respObj JobResp
 	err = json.Unmarshal(respBuf.Bytes(), &respObj)
 	if err != nil {
 		fmt.Println("error:", err)
 	}
 
-	return getDataId(respObj.JobId, pzAddr)
+	return getDataId(respObj.JobID, pzAddr)
 }
 
 // Constructs the ingest call for a GeoTIFF

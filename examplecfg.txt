@@ -1,5 +1,6 @@
 {
     "CliCmd":"ossim-cli",
+    "VersionCmd":"ossim-cli version"
     "PzAddr":"https://pz-gateway.stage.geointservices.io",
     "SvcName":"OSSIM client",
     "URL":"https://pzsvc-exec.stage.geointservices.io",

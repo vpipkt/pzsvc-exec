@@ -23,34 +23,10 @@ import (
 	"net/url"
 )
 
-// The "ResourceMetadata" section of the service data.  In general has little
-// programmatic effect at the Pz level - promarily exists as a way for users
-// and consuming services to learn about the registered service
-type resMeta struct {
-	Name string `json:"name"`					// The service name
-	Description string `json:"description"`		// Text block describing the service 
-	Method string `json:"method"` 				// Method used to call this service (like "POST").
-	Metadata map[string]string `json:"metadata"`// arbitrary key/value pairs.
-}
-
-// The overall service data.  
-type pzService struct {
-	ServiceId string `json:"serviceId"`			// The unique ID used by Pz to track this service
-	Url string `json:"url"`						// The URL that Pz uses to call this service
-	ResourceMetadata resMeta `json:"resourceMetadata"`	// See above
-}
-
 // Searches Pz for a service matching the input information.  if it finds one,
 // returns the service ID.  If it does not, returns an empty string.  Currently
 // only semi-functional.  Read through and vet carefully before declaring functional.
 func FindMySvc(svcName, pzAddr string) (string, error) {
-
-	// Pz generic list wrapper, around a list of service objects.
-	type svcWrapper struct {
-		Type       string			`json:"type"`
-		Data       []pzService		`json:"data"`
-		Pagination map[string]int	`json:"pagination"`
-	}
 
 	fmt.Println(pzAddr + "/service?per_page=1000&keyword=" + url.QueryEscape(svcName))
 
@@ -67,15 +43,15 @@ func FindMySvc(svcName, pzAddr string) (string, error) {
 		return "", err
 	}
 
-	var respObj svcWrapper
+	var respObj SvcWrapper
 	err = json.Unmarshal(respBuf, &respObj)
 	if err != nil {
 		return "", err
 	}
 
 	for _, checkServ := range respObj.Data {
-		if checkServ.ResourceMetadata.Name == svcName {
-			return checkServ.ServiceId, nil
+		if checkServ.ResMeta.Name == svcName {
+			return checkServ.ServiceID, nil
 		}
 	}
 
@@ -113,7 +89,7 @@ func SubmitSinglePart(method, bodyStr, address string) (*http.Response, error) {
 // if it has not, it re-registers.  Best practice is to do this every time your service
 // starts up.  For those of you code-reading, the filter is still somewhat rudimentary.
 // It will improve as better tools become available.
-func ManageRegistration(svcName, svcDesc, svcUrl, pzAddr string, imgReq map[string]string) error {
+func ManageRegistration(svcName, svcDesc, svcURL, pzAddr string, imgReq map[string]string) error {
 	if len(imgReq) > 0 {
 		newImgReq:= map[string]string{}
 		for key, val := range imgReq {
@@ -124,23 +100,25 @@ func ManageRegistration(svcName, svcDesc, svcUrl, pzAddr string, imgReq map[stri
 //TODO: imgReq may not be generic enough.  Look into/reconsider.
 	
 	fmt.Println("Finding")
-	svcId, err := FindMySvc(svcName, pzAddr)
+	svcID, err := FindMySvc(svcName, pzAddr)
 	if err != nil {
 		return err
 	}
+	svcVers := "" //TODO: Update this to current version numebr
 
-	metaObj := resMeta{ svcName, svcDesc, "POST", imgReq }
-	svcObj := pzService{ svcId, svcUrl, metaObj }
-	svcJson, err := json.Marshal(svcObj)
+	svcClass := ClassType{"UNCLASSIFIED"} // TODO: this will have to be updated at some point.
+	metaObj := ResMeta{ svcName, svcDesc, svcClass, "POST", svcVers, imgReq }
+	svcObj := Service{ svcID, svcURL, metaObj }
+	svcJSON, err := json.Marshal(svcObj)
 
-fmt.Println("attempting to register/update: " + string(svcJson))
+fmt.Println("attempting to register/update: " + string(svcJSON))
 
-	if svcId == "" {
+	if svcID == "" {
 		fmt.Println("Registering")
-		_, err = SubmitSinglePart("POST", string(svcJson), pzAddr+"/service")
+		_, err = SubmitSinglePart("POST", string(svcJSON), pzAddr+"/service")
 	} else {
 		fmt.Println("Updating")
-		_, err = SubmitSinglePart("PUT", string(svcJson), pzAddr+"/service/"+svcId)
+		_, err = SubmitSinglePart("PUT", string(svcJSON), pzAddr+"/service/"+svcID)
 	}
 	if err != nil {
 		return err
