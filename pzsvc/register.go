@@ -23,17 +23,15 @@ import (
 	"net/url"
 )
 
-// Searches Pz for a service matching the input information.  if it finds one,
-// returns the service ID.  If it does not, returns an empty string.  Currently
-// only semi-functional.  Read through and vet carefully before declaring functional.
-func FindMySvc(svcName, pzAddr string) (string, error) {
+// FindMySvc Searches Pz for a service matching the input information.  If it finds
+// one, it returns the service ID.  If it does not, returns an empty string.  Currently
+// only able to search on service name.  Will be much more viable as a long-term answer
+// if/when it's able to search on both service name and submitting user.
+func FindMySvc(svcName, pzAddr, authKey string) (string, error) {
 
-	fmt.Println(pzAddr + "/service?per_page=1000&keyword=" + url.QueryEscape(svcName))
-
-	resp, err := http.Get(pzAddr + "/service?per_page=1000&keyword=" + url.QueryEscape(svcName))
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	query := pzAddr + "/service?per_page=1000&keyword=" + url.QueryEscape(svcName)
+	
+	resp, err := submitGet(query, authKey)
 	if err != nil {
 		return "", err
 	}
@@ -56,12 +54,13 @@ func FindMySvc(svcName, pzAddr string) (string, error) {
 	}
 
 	return "", nil
+	
 }
 
-// Sends a single-part POST or a PUT call to Pz and returns the response.
-// May work on some other methods, but not yet tested for them.  Includes
+// SubmitSinglePart sends a single-part POST or a PUT call to Pz and returns the
+// response.  May work on some other methods, but not yet tested for them.  Includes
 // the necessary headers.
-func SubmitSinglePart(method, bodyStr, address string) (*http.Response, error) {
+func SubmitSinglePart(method, bodyStr, address, authKey string) (*http.Response, error) {
 
 	fileReq, err := http.NewRequest(method, address, bytes.NewBuffer([]byte(bodyStr)))
 	if err != nil {
@@ -74,6 +73,7 @@ func SubmitSinglePart(method, bodyStr, address string) (*http.Response, error) {
 	fileReq.Header.Add("from", "0")
 	fileReq.Header.Add("key", "stamp")
 	fileReq.Header.Add("order", "true")
+	fileReq.Header.Add("Authorization", authKey)
 
 	client := &http.Client{}
 	resp, err := client.Do(fileReq)
@@ -84,30 +84,21 @@ func SubmitSinglePart(method, bodyStr, address string) (*http.Response, error) {
 	return resp, err
 }
 
-// Handles Pz registration for a service.  It checks the current service list to see if
-// it has been registered already.  If it has not, it performs initial registration.
-// if it has not, it re-registers.  Best practice is to do this every time your service
-// starts up.  For those of you code-reading, the filter is still somewhat rudimentary.
-// It will improve as better tools become available.
-func ManageRegistration(svcName, svcDesc, svcURL, pzAddr string, imgReq map[string]string) error {
-	if len(imgReq) > 0 {
-		newImgReq:= map[string]string{}
-		for key, val := range imgReq {
-			newImgReq["imgReq - " + key] = val
-		}
-		imgReq = newImgReq
-	}
-//TODO: imgReq may not be generic enough.  Look into/reconsider.
+// ManageRegistration Handles Pz registration for a service.  It checks the current
+// service list to see if it has been registered already.  If it has not, it performs
+// initial registration.  If it has not, it re-registers.  Best practice is to do this
+// every time your service starts up.  For those of you code-reading, the filter is
+// still somewhat rudimentary.  It will improve as better tools become available.
+func ManageRegistration(svcName, svcDesc, svcURL, pzAddr, svcVers, authKey string, attributes map[string]string) error {
 	
 	fmt.Println("Finding")
-	svcID, err := FindMySvc(svcName, pzAddr)
+	svcID, err := FindMySvc(svcName, pzAddr, authKey)
 	if err != nil {
 		return err
 	}
-	svcVers := "" //TODO: Update this to current version numebr
-
+	
 	svcClass := ClassType{"UNCLASSIFIED"} // TODO: this will have to be updated at some point.
-	metaObj := ResMeta{ svcName, svcDesc, svcClass, "POST", svcVers, imgReq }
+	metaObj := ResMeta{ svcName, svcDesc, svcClass, "POST", svcVers, attributes }
 	svcObj := Service{ svcID, svcURL, metaObj }
 	svcJSON, err := json.Marshal(svcObj)
 
@@ -115,10 +106,10 @@ fmt.Println("attempting to register/update: " + string(svcJSON))
 
 	if svcID == "" {
 		fmt.Println("Registering")
-		_, err = SubmitSinglePart("POST", string(svcJSON), pzAddr+"/service")
+		_, err = SubmitSinglePart("POST", string(svcJSON), pzAddr+"/service", authKey)
 	} else {
 		fmt.Println("Updating")
-		_, err = SubmitSinglePart("PUT", string(svcJSON), pzAddr+"/service/"+svcID)
+		_, err = SubmitSinglePart("PUT", string(svcJSON), pzAddr+"/service/"+svcID, authKey)
 	}
 	if err != nil {
 		return err

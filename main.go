@@ -32,14 +32,16 @@ import (
 
 type configType struct {
 	CliCmd      string
-	VersionCmd	string
+	VersionCmd	string // should have either this or VersionStr - not both.  Meaningless without PzAddr
+	VersionStr	string // should have either this or VersionCmd - not both.  Meaningless without PzAddr
 	PzAddr      string
-	SvcName     string
-	URL         string
+	SvcName     string // meaningless without PzAddr, URL
+	URL         string // meaningless without PzAddr, SvcName
 	Port        int
 	Description	string
-	ImageReqs	map[string]string
-	Attributes	map[string]string
+	AuthEnVar	string // meaningless without PzAddr, URL, SvcName
+	ImageReqs	map[string]string // meaningless without PzAddr, URL, SvcName
+	Attributes	map[string]string // meaningless without PzAddr, URL, SvcName
 }
 
 type outStruct struct {
@@ -69,7 +71,6 @@ func main() {
 		fmt.Println("error:", err)
 	}
 
-	vCmdSlice := splitOrNil(configObj.VersionCmd, " ")
 	cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
 
 	if configObj.Port <= 0 {
@@ -77,14 +78,33 @@ func main() {
 	}
 
 	portStr := ":" + strconv.Itoa(configObj.Port)
+	authKey := os.Getenv(configObj.AuthEnVar)
 
-	if configObj.SvcName != "" && configObj.PzAddr != "" {
+	version := configObj.VersionStr
+	vCmdSlice := splitOrNil(configObj.VersionCmd, " ")
+	if vCmdSlice != nil {
+		vCmd := exec.Command (vCmdSlice[0], vCmdSlice[1:]...)
+		verB, err := vCmd.Output()
+		if err != nil {
+			fmt.Println("error: VersionCmd failed: " + err.Error())
+		}
+		version = string(verB)
+	}
+	
+	for key, val := range configObj.ImageReqs {
+		configObj.Attributes["imgReq - " + key] = val
+	}
+
+	if configObj.SvcName != "" && configObj.PzAddr != "" && configObj.URL != "" {
+	
 		fmt.Println("About to manage registration.")
 		err = pzsvc.ManageRegistration(	configObj.SvcName,
 										configObj.Description,
 										configObj.URL + "/execute",
 										configObj.PzAddr,
-										configObj.ImageReqs )
+										version,
+										authKey,
+										configObj.Attributes )
 		if err != nil {
 			fmt.Println("error:", err.Error())
 		}
@@ -107,7 +127,7 @@ func main() {
 				var outGeoJStr string
 				//var usePz string
 
-				var output outStruct
+				var output outStruct 
 
 				// might be time to start looking into that "help" thing.
 
@@ -161,7 +181,7 @@ func main() {
 				for i, inFile := range inFileSlice {
 
 					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
-					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr)
+					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors,err.Error())
 						fmt.Printf("Download failed.  %s", err.Error())
@@ -205,7 +225,7 @@ func main() {
 
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
-					dataID, err := pzsvc.IngestTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -216,7 +236,7 @@ func main() {
 
 				for i, outTxt := range outTxtSlice {
 					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
-					dataID, err := pzsvc.IngestTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -227,7 +247,7 @@ func main() {
 
 				for i, outGeoJ := range outGeoJSlice {
 					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
-					dataID, err := pzsvc.IngestGeoJson(outGeoJ, runID, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestGeoJSON(outGeoJ, runID, configObj.PzAddr, cmdSlice[0], configObj.VersionStr, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -323,6 +343,5 @@ func printJSON (w http.ResponseWriter, output interface{}) {
 		fmt.Fprintf(w, `{"Errors":"Json marshalling failure.  Data not reportable."}`)
 	}
 
-	outStr := string(outBuf)
-	fmt.Fprintf(w, "%s", outStr)
+	fmt.Fprintf(w, "%s", string(outBuf))
 }

@@ -6,6 +6,7 @@
     "URL":"https://pzsvc-exec.stage.geointservices.io",
     "Port":8080,
     "Description":"The OSSIM shoreline-determination algorithm, served via piazza",
+    "AuthEnVar":"PZ_AUTH",
     "ImageReqs":{
         "CloudCover":"10%",
         "Bands":"3,6",
