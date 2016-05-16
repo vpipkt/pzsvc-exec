@@ -32,13 +32,16 @@ import (
 
 type configType struct {
 	CliCmd      string
+	VersionCmd	string // should have either this or VersionStr - not both.  Meaningless without PzAddr
+	VersionStr	string // should have either this or VersionCmd - not both.  Meaningless without PzAddr
 	PzAddr      string
-	SvcName     string
-	URL         string
+	SvcName     string // meaningless without PzAddr, URL
+	URL         string // meaningless without PzAddr, SvcName
 	Port        int
 	Description	string
-	ImageReqs	map[string]string
-	Attributes	map[string]string
+	AuthEnVar	string // meaningless without PzAddr, URL, SvcName
+	ImageReqs	map[string]string // meaningless without PzAddr, URL, SvcName
+	Attributes	map[string]string // meaningless without PzAddr, URL, SvcName
 }
 
 type outStruct struct {
@@ -55,7 +58,7 @@ func main() {
 		return
 	}
 
-	// first argument after the base call should be the path to the config file.
+	// First argument after the base call should be the path to the config file.
 	// ReadFile returns the contents of the file as a byte buffer.
 	configBuf, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
@@ -68,19 +71,40 @@ func main() {
 		fmt.Println("error:", err)
 	}
 
+	cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
+
 	if configObj.Port <= 0 {
 		configObj.Port = 8080
 	}
 
 	portStr := ":" + strconv.Itoa(configObj.Port)
+	authKey := os.Getenv(configObj.AuthEnVar)
 
-	if configObj.SvcName != "" && configObj.PzAddr != "" {
+	version := configObj.VersionStr
+	vCmdSlice := splitOrNil(configObj.VersionCmd, " ")
+	if vCmdSlice != nil {
+		vCmd := exec.Command (vCmdSlice[0], vCmdSlice[1:]...)
+		verB, err := vCmd.Output()
+		if err != nil {
+			fmt.Println("error: VersionCmd failed: " + err.Error())
+		}
+		version = string(verB)
+	}
+	
+	for key, val := range configObj.ImageReqs {
+		configObj.Attributes["imgReq - " + key] = val
+	}
+
+	if configObj.SvcName != "" && configObj.PzAddr != "" && configObj.URL != "" {
+	
 		fmt.Println("About to manage registration.")
 		err = pzsvc.ManageRegistration(	configObj.SvcName,
 										configObj.Description,
 										configObj.URL + "/execute",
 										configObj.PzAddr,
-										configObj.ImageReqs )
+										version,
+										authKey,
+										configObj.Attributes )
 		if err != nil {
 			fmt.Println("error:", err.Error())
 		}
@@ -101,7 +125,9 @@ func main() {
 				var outTiffStr string
 				var outTxtStr string
 				var outGeoJStr string
-				var usePz string
+				//var usePz string
+
+				var output outStruct 
 
 				// might be time to start looking into that "help" thing.
 
@@ -111,17 +137,16 @@ func main() {
 					outTiffStr = r.URL.Query().Get("outTiffs")
 					outTxtStr = r.URL.Query().Get("outTxts")
 					outGeoJStr = r.URL.Query().Get("outGeoJson")
-					usePz = r.URL.Query().Get("pz")
+					//usePz = r.URL.Query().Get("pz")
 				} else {
 					cmdParam = r.FormValue("cmd")
 					inFileStr = r.FormValue("inFiles")
 					outTiffStr = r.FormValue("outTiffs")
 					outTxtStr = r.FormValue("outTxts")
 					outGeoJStr = r.FormValue("outGeoJson")
-					usePz = r.FormValue("pz")
+					//usePz = r.FormValue("pz")
 				}
 
-				cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
 				cmdParamSlice := splitOrNil(cmdParam, " ")
 				cmdSlice := append(cmdConfigSlice, cmdParamSlice...)
 
@@ -129,8 +154,6 @@ func main() {
 				outTiffSlice := splitOrNil(outTiffStr, ",")
 				outTxtSlice := splitOrNil(outTxtStr, ",")
 				outGeoJSlice := splitOrNil(outGeoJStr, ",")
-
-				var output outStruct
 
 				runID, err := psuUUID()
 				if err != nil {
@@ -158,7 +181,7 @@ func main() {
 				for i, inFile := range inFileSlice {
 
 					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
-					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr)
+					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors,err.Error())
 						fmt.Printf("Download failed.  %s", err.Error())
@@ -197,16 +220,14 @@ func main() {
 					output.Errors = append(output.Errors, err.Error())
 				}
 				output.ProgReturn = b.String()
-				output.ProgReturn = strings.Replace(output.ProgReturn, "\r\n", "\n", -1)
-				output.ProgReturn = strings.Replace(output.ProgReturn, "\r", "\n", -1)
 				
 				fmt.Printf("Program output: %s\n", output.ProgReturn)
 
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
-					dataID, err := pzsvc.IngestTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
 					if err != nil {
-						fmt.Fprintf(w, err.Error())
+						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outTiff] = dataID
@@ -215,7 +236,7 @@ func main() {
 
 				for i, outTxt := range outTxtSlice {
 					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
-					dataID, err := pzsvc.IngestTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -226,7 +247,7 @@ func main() {
 
 				for i, outGeoJ := range outGeoJSlice {
 					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
-					dataID, err := pzsvc.IngestGeoJson(outGeoJ, runID, configObj.PzAddr, cmdSlice[0])
+					dataID, err := pzsvc.IngestGeoJSON(outGeoJ, runID, configObj.PzAddr, cmdSlice[0], configObj.VersionStr, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -236,6 +257,7 @@ func main() {
 				}
 
 				// this isn't a thing now, but might again become a thing later.
+/*
 				if usePz != "" {
 					
 					type pzCont struct {
@@ -262,10 +284,10 @@ func main() {
 
 					wrap.DataType = cont
 
-					printJson(w, wrap)
-				} else {
-					printJson(w, output)
-				}
+					printJSON(w, wrap)
+				} else {*/
+					printJSON(w, output)
+//				}
 
 
 			}
@@ -279,10 +301,17 @@ func main() {
 			if configObj.Attributes == nil {
 				fmt.Fprintf(w, "{ }")
 			} else {
-				printJson(w, configObj.Attributes)
+				printJSON(w, configObj.Attributes)
 			}
 		case "/help":
 			fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
+		case "/version":
+
+			b, err := exec.Command(vCmdSlice[0], vCmdSlice[1:]...).Output()
+			if err == nil {
+				fmt.Fprintf(w, string(b))
+			}
+			
 		default:
 			fmt.Fprintf(w, "Command undefined.  Try help?\n")
 		}
@@ -308,12 +337,11 @@ func psuUUID() (string, error) {
 	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
 }
 
-func printJson (w http.ResponseWriter, output interface{}) {
+func printJSON (w http.ResponseWriter, output interface{}) {
 	outBuf, err := json.Marshal(output)
 	if err != nil {
 		fmt.Fprintf(w, `{"Errors":"Json marshalling failure.  Data not reportable."}`)
 	}
 
-	outStr := string(outBuf)
-	fmt.Fprintf(w, "%s", outStr)
+	fmt.Fprintf(w, "%s", string(outBuf))
 }
