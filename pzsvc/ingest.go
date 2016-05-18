@@ -50,7 +50,7 @@ func submitGet(payload, authKey string) (*http.Response, error) {
 
 // submitMultipart sends a multi-part POST call, including an optional uploaded file,
 // and returns the response.  Primarily intended to support Ingest calls.
-func submitMultipart(bodyStr, subFold, address, upload, authKey string) (*http.Response, error) {
+func submitMultipart(bodyStr, address, filename, authKey string, file io.Reader) (*http.Response, error) {
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -60,16 +60,9 @@ func submitMultipart(bodyStr, subFold, address, upload, authKey string) (*http.R
 		return nil, err
 	}
 
-	if upload != "" {
-		
-		file, err := os.Open(locString(subFold, upload))
-		if err != nil {
-			return nil, err
-		}
+	if file != nil {
 
-		defer file.Close()
-
-		part, err := writer.CreateFormFile("file", upload)
+		part, err := writer.CreateFormFile("file", filename)
 		if err != nil {
 			return nil, err
 		}
@@ -178,11 +171,14 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 	return "", errors.New("Never completed.")
 }
 
-// ingestMultipart handles the Pz Ingest process.  It upload the file to Pz and
+// ingestMultipart handles the Pz Ingest process.  It uploads the file to Pz and
 // returns the resulting DataId.
-func ingestMultipart(bodyStr, subFold, pzAddr, filename, authKey string) (string, error) {
 
-	resp, err := submitMultipart(bodyStr, subFold, (pzAddr + "/job"), filename, authKey)
+
+
+func ingestMultipart(bodyStr, pzAddr, authKey, filename string, file io.Reader) (string, error) {
+
+	resp, err := submitMultipart(bodyStr, (pzAddr + "/job"), filename, authKey, file)
 	if err != nil {
 		return "", err
 	}
@@ -208,7 +204,7 @@ func ingestMultipart(bodyStr, subFold, pzAddr, filename, authKey string) (string
 // genIngestJson constructs and returns the JSON for a Pz ingest call.
 func genIngestJSON(fName, fType, mimeType, cmdName, content, version string) (string, error) {
 	
-	desc := fmt.Sprintf("%s uploaded by pzsvc-exec for %s.", fType, cmdName)
+	desc := fmt.Sprintf("%s uploaded by %s.", fType, cmdName)
 	rMeta := ResMeta{fName, desc, ClassType{"UNCLASSIFIED"}, "POST", version, nil} //TODO: implement classification
 	dType := DataType{content, fType, mimeType}
 	dRes := DataResource{dType, rMeta, "", SpatMeta{}}
@@ -220,28 +216,53 @@ func genIngestJSON(fName, fType, mimeType, cmdName, content, version string) (st
 	return string(bbuff), err
 }
 
-// IngestTiff constructs and executes the ingest call for a GeoTIFF, returning the DataId
-func IngestTiff(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
+// IngestTiffReader generates and sends an ingest request to Pz, uploading the contents of the
+// given reader as a TIFF file.
+func IngestTiffReader (filename, pzAddr, cmdName, version, authKey string, inTiff io.Reader) (string, error) {
+	jStr, err := genIngestJSON(filename, "raster", "image/tiff", cmdName, "", version)
+	if err != nil {
+		return "", err
+	}
+	return ingestMultipart(jStr, pzAddr, authKey, filename, inTiff)
+}
+
+// IngestLocalFile finds and loads the local file to be read (if any) then passes the result
+// on to ingestMultipart.
+func ingestLocalFile(bodyStr, subFold, pzAddr, filename, authKey string) (string, error) {
+	var file *os.File
+	file = nil
+	if 	filename != "" {
+		file, err := os.Open(locString(subFold, filename))
+		if err != nil {
+			return "", err
+		}
+		defer file.Close()		
+	}
+	return ingestMultipart(bodyStr, pzAddr, authKey, filename, file)
+}
+
+// IngestLocalTiff constructs and executes the ingest call for a local GeoTIFF, returning the DataId
+func IngestLocalTiff(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
 	
 	jStr, err := genIngestJSON(filename, "raster", "image/tiff", cmdName, "", version)
 	if err != nil {
 		return "", err
 	}
-	return ingestMultipart(jStr, subFold, pzAddr, filename, authKey)
+	return ingestLocalFile(jStr, subFold, pzAddr, filename, authKey)
 }
 
-// IngestGeoJSON constructs and executes the ingest call for a GeoJson, returning the DataId
-func IngestGeoJSON(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
+// IngestLocalGeoJSON constructs and executes the ingest call for a local GeoJson, returning the DataId
+func IngestLocalGeoJSON(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
 
 	jStr, err := genIngestJSON(filename, "geojson", "application/vnd.geo+json", cmdName, "", version)
 	if err != nil {
 		return "", err	
 	}
-	return ingestMultipart(jStr, subFold, pzAddr, filename, authKey)
+	return ingestLocalFile(jStr, subFold, pzAddr, filename, authKey)
 }
 
-// IngestTxt constructs and executes the ingest call for standard text, returning the DataId
-func IngestTxt(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
+// IngestLocalTxt constructs and executes the ingest call for a local text file, returning the DataId
+func IngestLocalTxt(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
 	
 	textblock, err := ioutil.ReadFile(locString(subFold, filename))
 	if err != nil {
@@ -252,5 +273,5 @@ func IngestTxt(filename, subFold, pzAddr, cmdName, version, authKey string) (str
 	if err != nil {
 		return "", nil
 	}
-	return ingestMultipart(jStr, "", pzAddr, "", authKey)
+	return ingestLocalFile(jStr, "", pzAddr, "", authKey)
 }
