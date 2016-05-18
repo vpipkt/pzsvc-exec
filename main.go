@@ -225,7 +225,7 @@ func main() {
 
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
-					dataID, err := pzsvc.IngestTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
+					dataID, err := pzsvc.IngestLocalTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -236,7 +236,7 @@ func main() {
 
 				for i, outTxt := range outTxtSlice {
 					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
-					dataID, err := pzsvc.IngestTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
+					dataID, err := pzsvc.IngestLocalTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
@@ -247,7 +247,7 @@ func main() {
 
 				for i, outGeoJ := range outGeoJSlice {
 					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
-					dataID, err := pzsvc.IngestGeoJSON(outGeoJ, runID, configObj.PzAddr, cmdSlice[0], configObj.VersionStr, authKey)
+					dataID, err := pzsvc.IngestLocalGeoJSON(outGeoJ, runID, configObj.PzAddr, cmdSlice[0], configObj.VersionStr, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error())
 						fmt.Printf("Upload failed.  %s", err.Error())
