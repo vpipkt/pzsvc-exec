@@ -54,7 +54,6 @@ func FindMySvc(svcName, pzAddr, authKey string) (string, error) {
 	}
 
 	return "", nil
-	
 }
 
 // SubmitSinglePart sends a single-part POST or a PUT call to Pz and returns the
@@ -98,7 +97,7 @@ func ManageRegistration(svcName, svcDesc, svcURL, pzAddr, svcVers, authKey strin
 	}
 	
 	svcClass := ClassType{"UNCLASSIFIED"} // TODO: this will have to be updated at some point.
-	metaObj := ResMeta{ svcName, svcDesc, svcClass, "POST", svcVers, attributes }
+	metaObj := ResMeta{ svcName, svcDesc, &svcClass, "POST", svcVers, attributes }
 	svcObj := Service{ svcID, svcURL, metaObj }
 	svcJSON, err := json.Marshal(svcObj)
 

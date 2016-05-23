@@ -110,7 +110,7 @@ func Download(dataID, subFold, pzAddr, authKey string) (string, error) {
 	_, params, err := mime.ParseMediaType(contDisp)
 	filename := params["filename"]
 	if filename == "" {
-		filename = "dummy.txt"
+		return "", fmt.Errorf(`File for DataID %s unnamed.  Probable ingest error.`, dataID)
 	}
 	
 	out, err := os.Create(locString(subFold, filename))
@@ -174,8 +174,6 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 // ingestMultipart handles the Pz Ingest process.  It uploads the file to Pz and
 // returns the resulting DataId.
 
-
-
 func ingestMultipart(bodyStr, pzAddr, authKey, filename string, file io.Reader) (string, error) {
 
 	resp, err := submitMultipart(bodyStr, (pzAddr + "/job"), filename, authKey, file)
@@ -202,14 +200,15 @@ func ingestMultipart(bodyStr, pzAddr, authKey, filename string, file io.Reader) 
 }
 
 // genIngestJson constructs and returns the JSON for a Pz ingest call.
-func genIngestJSON(fName, fType, mimeType, cmdName, content, version string) (string, error) {
+func genIngestJSON(	fName, fType, mimeType, cmdName, content, version string,
+					props map[string]string) (string, error) {
 	
 	desc := fmt.Sprintf("%s uploaded by %s.", fType, cmdName)
-	rMeta := ResMeta{fName, desc, ClassType{"UNCLASSIFIED"}, "POST", version, nil} //TODO: implement classification
-	dType := DataType{content, fType, mimeType}
-	dRes := DataResource{dType, rMeta, "", SpatMeta{}}
-	jType := IngJobType{"ingest", true, dRes}
-	iCall := IngestCall{"defaultUser", jType}	
+	rMeta := ResMeta{fName, desc, &ClassType{"UNCLASSIFIED"}, "POST", version, props} //TODO: implement classification
+	dType := DataType{content, fType, mimeType, nil}
+	dRes := DataResource{&dType, &rMeta, "", nil}
+	jType := IngJobType{"ingest", true, &dRes}
+	iCall := IngestCall{"defaultUser", &jType}	
 	
 	bbuff, err := json.Marshal(iCall)
 	
@@ -218,8 +217,10 @@ func genIngestJSON(fName, fType, mimeType, cmdName, content, version string) (st
 
 // IngestTiffReader generates and sends an ingest request to Pz, uploading the contents of the
 // given reader as a TIFF file.
-func IngestTiffReader (filename, pzAddr, cmdName, version, authKey string, inTiff io.Reader) (string, error) {
-	jStr, err := genIngestJSON(filename, "raster", "image/tiff", cmdName, "", version)
+func IngestTiffReader (	filename, pzAddr, sourceName, version, authKey string,
+						inTiff io.Reader, props map[string]string) (string, error) {
+							
+	jStr, err := genIngestJSON(filename, "raster", "image/tiff", sourceName, "", version, props)
 	if err != nil {
 		return "", err
 	}
@@ -242,9 +243,10 @@ func ingestLocalFile(bodyStr, subFold, pzAddr, filename, authKey string) (string
 }
 
 // IngestLocalTiff constructs and executes the ingest call for a local GeoTIFF, returning the DataId
-func IngestLocalTiff(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
-	
-	jStr, err := genIngestJSON(filename, "raster", "image/tiff", cmdName, "", version)
+func IngestLocalTiff(filename, subFold, pzAddr, cmdName, version, authKey string,
+					 props map[string]string) (string, error) {
+						 
+	jStr, err := genIngestJSON(filename, "raster", "image/tiff", cmdName, "", version, props)
 	if err != nil {
 		return "", err
 	}
@@ -252,9 +254,10 @@ func IngestLocalTiff(filename, subFold, pzAddr, cmdName, version, authKey string
 }
 
 // IngestLocalGeoJSON constructs and executes the ingest call for a local GeoJson, returning the DataId
-func IngestLocalGeoJSON(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
+func IngestLocalGeoJSON(filename, subFold, pzAddr, cmdName, version, authKey string,
+						props map[string]string) (string, error) {
 
-	jStr, err := genIngestJSON(filename, "geojson", "application/vnd.geo+json", cmdName, "", version)
+	jStr, err := genIngestJSON(filename, "geojson", "application/vnd.geo+json", cmdName, "", version, props)
 	if err != nil {
 		return "", err	
 	}
@@ -262,16 +265,64 @@ func IngestLocalGeoJSON(filename, subFold, pzAddr, cmdName, version, authKey str
 }
 
 // IngestLocalTxt constructs and executes the ingest call for a local text file, returning the DataId
-func IngestLocalTxt(filename, subFold, pzAddr, cmdName, version, authKey string) (string, error) {
+func IngestLocalTxt(filename, subFold, pzAddr, cmdName, version, authKey string,
+					props map[string]string) (string, error) {
 	
 	textblock, err := ioutil.ReadFile(locString(subFold, filename))
 	if err != nil {
 		return "", err
 	}
 	
-	jStr, err := genIngestJSON(filename, "text", "text/plain", cmdName, strconv.QuoteToASCII(string(textblock)), version)
+	jStr, err := genIngestJSON(filename, "text", "text/plain", cmdName, strconv.QuoteToASCII(string(textblock)), version, props)
 	if err != nil {
 		return "", nil
 	}
 	return ingestLocalFile(jStr, "", pzAddr, "", authKey)
 }
+
+// GetFileMeta retrieves the metadata for a given dataID in the S3 bucket
+func GetFileMeta(dataID, pzAddr, authKey string) (*DataResource, error) {
+
+	call := fmt.Sprintf(`%s/data/%s`, pzAddr, dataID)
+	
+	resp, err := submitGet(call, authKey)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		return nil, err
+	}
+	
+	respBuf := &bytes.Buffer{}
+		
+	_, err = respBuf.ReadFrom(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	
+	var respObj DataResource
+	err = json.Unmarshal(respBuf.Bytes(), &respObj)
+	if err != nil {
+		return nil, err
+	}	
+
+	return &respObj, nil
+}
+
+// UpdateFileMeta updates the metadata for a given dataID in the S3 bucket
+func UpdateFileMeta(dataID, pzAddr, authKey string, newMeta map[string]string ) error {
+	
+	var meta struct { Metadata map[string]string `json:"metadata"` }
+	meta.Metadata = newMeta
+	jbuff, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	
+	_, err = SubmitSinglePart("POST", string(jbuff), fmt.Sprintf(`%s/data/%s`, pzAddr, dataID), authKey)
+	return err
+}
+
+
+
+
