@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/venicegeo/pzsvc-exec/pzsvc"
 )
@@ -109,9 +110,8 @@ func main() {
 			fmt.Println("error:", err.Error())
 		}
 		fmt.Println("Registration managed.")
-
 	}
-
+	
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		switch r.URL.Path {
@@ -162,13 +162,13 @@ func main() {
 
 				err = os.Mkdir("./"+runID, 0777)
 				if err != nil {
-					output.Errors = append(output.Errors, err.Error())
+					output.Errors = append(output.Errors, err.Error()+"(1)")
 				}
 				defer os.RemoveAll("./" + runID)
 
 				err = os.Chmod("./"+runID, 0777)
 				if err != nil {
-					output.Errors = append(output.Errors, err.Error())
+					output.Errors = append(output.Errors, err.Error()+"(2)")
 				}
 
 				if len(inFileSlice) > 0 {
@@ -183,7 +183,7 @@ func main() {
 					fmt.Printf("Downloading file %s - %d of %d.\n", inFile, i, len(inFileSlice))
 					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr, authKey)
 					if err != nil {
-						output.Errors = append(output.Errors,err.Error())
+						output.Errors = append(output.Errors,err.Error()+"(3)")
 						fmt.Printf("Download failed.  %s", err.Error())
 					} else {
 						output.InFiles[inFile] = fname
@@ -192,7 +192,7 @@ func main() {
 				}
 
 				if len(cmdSlice) == 0 {
-					output.Errors = append(output.Errors, `No cmd specified in config file.  Please provide "cmd" param.`)
+					output.Errors = append(output.Errors, `No cmd or CliCmd.  Please provide "cmd" param.(4)`)
 					break
 				}
 
@@ -217,18 +217,24 @@ func main() {
 
 				err = clc.Run()
 				if err != nil {
-					output.Errors = append(output.Errors, err.Error())
+					output.Errors = append(output.Errors, err.Error()+"(5)")
 				}
 				output.ProgReturn = b.String()
 				
 				fmt.Printf("Program output: %s\n", output.ProgReturn)
 
+				var attMap map[string]string
+				attMap["algoName"] = configObj.SvcName
+				attMap["algoVersion"] = version
+				attMap["algoCmd"] = configObj.CliCmd + cmdParam
+				attMap["algoProcTime"] = time.Now().UTC().Format("20060102.150405.99999")
+
 				for i, outTiff := range outTiffSlice {
 					fmt.Printf("Uploading Tiff %s - %d of %d.\n", outTiff, i, len(outTiffSlice))
-					dataID, err := pzsvc.IngestLocalTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
+					dataID, err := pzsvc.IngestLocalTiff(outTiff, runID, configObj.PzAddr, cmdSlice[0], version, authKey, attMap)
 					if err != nil {
-						output.Errors = append(output.Errors, err.Error())
-						fmt.Printf("Upload failed.  %s", err.Error())
+						output.Errors = append(output.Errors, err.Error()+"(6)")
+						fmt.Printf("Upload failed.  %s", err.Error()+"(7)")
 					} else {
 						output.OutFiles[outTiff] = dataID
 					}
@@ -236,10 +242,10 @@ func main() {
 
 				for i, outTxt := range outTxtSlice {
 					fmt.Printf("Uploading Txt %s - %d of %d.\n", outTxt, i, len(outTxtSlice))
-					dataID, err := pzsvc.IngestLocalTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0], version, authKey)
+					dataID, err := pzsvc.IngestLocalTxt(outTxt, runID, configObj.PzAddr, cmdSlice[0], version, authKey, attMap)
 					if err != nil {
-						output.Errors = append(output.Errors, err.Error())
-						fmt.Printf("Upload failed.  %s", err.Error())
+						output.Errors = append(output.Errors, err.Error()+"(8)")
+						fmt.Printf("Upload failed.  %s", err.Error()+"(9)")
 					} else {
 						output.OutFiles[outTxt] = dataID
 					}
@@ -247,49 +253,15 @@ func main() {
 
 				for i, outGeoJ := range outGeoJSlice {
 					fmt.Printf("Uploading GeoJson %s - %d of %d.\n", outGeoJ, i, len(outGeoJSlice))
-					dataID, err := pzsvc.IngestLocalGeoJSON(outGeoJ, runID, configObj.PzAddr, cmdSlice[0], configObj.VersionStr, authKey)
+					dataID, err := pzsvc.IngestLocalGeoJSON(outGeoJ, runID, configObj.PzAddr, cmdSlice[0], configObj.VersionStr, authKey, attMap)
 					if err != nil {
-						output.Errors = append(output.Errors, err.Error())
+						output.Errors = append(output.Errors, err.Error()+"(10)")
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outGeoJ] = dataID
 					}
 				}
-
-				// this isn't a thing now, but might again become a thing later.
-/*
-				if usePz != "" {
-					
-					type pzCont struct {
-						Type		string
-						Content		string
-						MimeType	string
-					}
-
-					type pzWrap struct {
-						DataType	pzCont
-						metadata	map[string]string
-					}
-										
-					var cont pzCont
-					var wrap pzWrap
-					outBuf, err := json.Marshal(output)
-					if err != nil {
-						output.Errors = append(output.Errors, err.Error())
-					}
-				
-					cont.Type = "text"
-					cont.Content = string(outBuf)
-					cont.MimeType = "text/plain"
-
-					wrap.DataType = cont
-
-					printJSON(w, wrap)
-				} else {*/
-					printJSON(w, output)
-//				}
-
-
+				printJSON(w, output)
 			}
 		case "/description":
 			if configObj.Description == "" {

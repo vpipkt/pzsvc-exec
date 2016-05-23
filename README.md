@@ -76,11 +76,11 @@ outGeoJson: as with outTiffs and outTxts, but with GeoJson files.  Must be in pr
 `http://<address:port>/execute`
 - No uploads, no downloads, direct access rather than through piazza, just running whatever command CliCmd has to offer
 
-`http://<address:port>/execute?cmd=ls`
-- Assumes that CliCmd is blank.  Makes no uploads and no downloads.  Accesses directly rather than through piazza, returning the contents of the local directory.
+`http://<address:port>/execute?cmd=ls -l`
+- Assumes that CliCmd is blank.  Makes no uploads and no downloads.  Returns the contents of the local directory.
 
-`http://<address:port>/execute?cmd=ls;inFiles=a10e6611-b996-4491-8988-ad0624ae8b6a,f71159c8-836d-4fcc-b8d9-4e9fb032e7a6,10fa1980-f0b5-4138-9f64-64b6fe7f73b2`
-- As above, but downloads 3 files prior to running `ls`.  Results should include the identity of the downloaded files in addition to the standard output for ls (a list of the files downloaded) and the Piazza wrapper.
+`http://<address:port>/execute?cmd=ls -l;inFiles=a10e6611-b996-4491-8988-ad0624ae8b6a,f71159c8-836d-4fcc-b8d9-4e9fb032e7a6,10fa1980-f0b5-4138-9f64-64b6fe7f73b2`
+- As above, but downloads 3 files prior to running `ls -l`.  Results should include the identity of the downloaded files in addition to the standard output for ls (a list of the files downloaded) and the Piazza wrapper.
 
 `http://<address:port>/execute?inFiles=a10e6611-b996-4491-8988-ad0624ae8b6a,f71159c8-836d-4fcc-b8d9-4e9fb032e7a6,10fa1980-f0b5-4138-9f64-64b6fe7f73b2;outTiffs=garden_rgb.tif,garden_b6.tif,garden_b3.tif;outTxts=testSend.txt;outGeoJson=tester.json`
 
