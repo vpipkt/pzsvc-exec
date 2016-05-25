@@ -51,41 +51,41 @@ type JobProg struct { //name
 
 // SpatMeta corresponds to model/job/metadata/SpatialMetadata.java.
 type SpatMeta struct { //name
-	CoordRefSystem	string		`json:"coordinateReferenceSystem"`
-	EpsgCode		string		`json:"epsgCode"`
-	MinX			float64		`json:"minX"`
-	MinY			float64		`json:"minY"`
-	MinZ			float64		`json:"minZ"`
-	MaxX			float64		`json:"maxX"`
-	MaxY			float64		`json:"maxY"`
-	MaxZ			float64		`json:"maxZ"`
+	CoordRefSystem	string		`json:"coordinateReferenceSystem,omitempty"`
+	EpsgCode		string		`json:"epsgCode,omitempty"`
+	MinX			float64		`json:"minX,omitempty"`
+	MinY			float64		`json:"minY,omitempty"`
+	MinZ			float64		`json:"minZ,omitempty"`
+	MaxX			float64		`json:"maxX,omitempty"`
+	MaxY			float64		`json:"maxY,omitempty"`
+	MaxZ			float64		`json:"maxZ,omitempty"`
 }
 
 // ClassType corresponds to model.security.SecurityClassification.
 type ClassType struct {
-	Classification	string		`json:"classification"`
+	Classification	string		`json:"classification,omitempty"`
 }
 
 // ResMeta corresponds to model/job/metadata/ResourceMetadata.java.
 // Worth noting that Pz pays no attention to the contents of the
 // Metadata map field except to act as a passthrough.
 type ResMeta struct {
-	Name			string		`json:"name"`
-	Description		string		`json:"description"`
-	ClassType		*ClassType	`json:"classType"`
-	Method			string		`json:"method"`
-	Version			string		`json:"version"`
-	Metadata		map[string]string `json:"metadata"`
+	Name			string		`json:"name,omitempty"`
+	Description		string		`json:"description,omitempty"`
+	ClassType		ClassType	`json:"classType,omitempty"`
+	Method			string		`json:"method,omitempty"`
+	Version			string		`json:"version,omitempty"`
+	Metadata		map[string]string `json:"metadata,omitempty"`
 }
 
 // S3Loc corresponds with model/data/location/S3FileStore.java
 // It's the form of FileLocation that refers to things currently
 // in the S3 Bucket.
 type S3Loc struct {
-	FileName		string		`json:"fileName"`
-	DomainName		string		`json:"domainName"`
-	BucketName		string		`json:"bucketName"`
-	FileSize		float64		`json:"fileSize"`
+	FileName		string		`json:"fileName,omitempty"`
+	DomainName		string		`json:"domainName,omitempty"`
+	BucketName		string		`json:"bucketName,omitempty"`
+	FileSize		float64		`json:"fileSize,omitempty"`
 }
 
 // DataType corresponds to model/data/DataType.java.  It's an occasional
@@ -93,26 +93,26 @@ type S3Loc struct {
 // the data that the type is referring to.  In cases where it is empty, the
 // data is attached elsewhere.
 type DataType struct { //name
-	Content			string		`json:"content"`
-	Type			string		`json:"type"`
-	MimeType		string		`json:"mimeType"`
-	Location		*S3Loc		`json:"location"`
+	Content			string		`json:"content,omitempty"`
+	Type			string		`json:"type,omitempty"`
+	MimeType		string		`json:"mimeType,omitempty"`
+	Location		S3Loc		`json:"location,omitempty"`
 }
 
 // DataResource corresponds to model/data/DataResource.java  It is also
 // used as the response type for Get data/{dataID} calls.
 type DataResource struct {
-	DataType		*DataType	`json:"dataType"`
-	Metadata		*ResMeta	`json:"metadata"`
-	DataID			string		`json:"dataId"`
-	SpatMeta		*SpatMeta	`json:"spatialMetadata"`
+	DataType		DataType	`json:"dataType,omitempty"`
+	Metadata		ResMeta		`json:"metadata,omitempty"`
+	DataID			string		`json:"dataId,omitempty"`
+	SpatMeta		SpatMeta	`json:"spatialMetadata,omitempty"`
 }
 
 // IngJobType corresponds to model/job/type/IngestJob.java
 type IngJobType 	struct {
-	Type			string		`json:"type"`
-	Host			bool		`json:"host"`
-	Data			*DataResource	`json:"data"`
+	Type			string		`json:"type,omitempty"`
+	Host			bool		`json:"host,omitempty"`
+	Data			DataResource	`json:"data,omitempty"`
 }
 
 /***********************/
@@ -122,24 +122,24 @@ type IngJobType 	struct {
 // ExecService corresponds to model/service/metadata/ExecuteServiceData.java
 // It is used to call services through Pz
 type ExecService struct {
-	ServiceID		string				`json:"serviceId"`
-	DataInputs		map[string]DataType	`json:"dataInputs"`
-	DataOutput		DataType			`json:"dataOutput"`
+	ServiceID		string				`json:"serviceId,omitempty"`
+	DataInputs		map[string]DataType	`json:"dataInputs,omitempty"`
+	DataOutput		DataType			`json:"dataOutput,omitempty"`
 }
 
 // Service corresponds to model/service/metadata/Service.java
 // Used as the payload in register service and update service jobs.
 // Also used in the response to the List Service job.
 type Service struct {
-	ServiceID		string		`json:"serviceId"`
-	URL				string		`json:"url"`
-	ResMeta			ResMeta		`json:"resourceMetadata"`
+	ServiceID		string		`json:"serviceId,omitempty"`
+	URL				string		`json:"url,omitempty"`
+	ResMeta			ResMeta		`json:"resourceMetadata,omitempty"`
 }
 
 // IngestCall corresponds to model/request/PiazzaJobRequest.java
 type IngestCall struct { //name
-	UserName		string		`json:"userName"`
-	JobType			*IngJobType	`json:"jobType"`
+	UserName		string		`json:"userName,omitempty"`
+	JobType			IngJobType	`json:"jobType,omitempty"`
 }
 
 /***********************/
@@ -149,27 +149,27 @@ type IngestCall struct { //name
 // JobResult corresponds to model/job/result/type/JobResult.java
 // It's the immediate result gotten back from asynch jobs (service calls and ingests, mostly)
 type JobResult struct { //name
-	Type			string		`json:"type"`
-	JobID			string		`json:"jobId"`
+	Type			string		`json:"type,omitempty"`
+	JobID			string		`json:"jobId,omitempty"`
 }
 
 // JobResp corresponds to model/job/Job.java
 // It's the response object for a Check Status call against a JobID
 type JobResp struct { //name
-	Type			string		`json:"type"`
-	JobID			string		`json:"jobId"`
-	Result			*DataResult	`json:"result"`
-	Status			string		`json:"status"`
-	JobType			string		`json:"jobType"`
-	SubmittedBy		string		`json:"submittedBy"`
-	Progress		*JobProg	`json:"progress"`
-	Message			string		`json:"message"`	//used for error responses
+	Type			string		`json:"type,omitempty"`
+	JobID			string		`json:"jobId,omitempty"`
+	Result			DataResult	`json:"result,omitempty"`
+	Status			string		`json:"status,omitempty"`
+	JobType			string		`json:"jobType,omitempty"`
+	SubmittedBy		string		`json:"submittedBy,omitempty"`
+	Progress		JobProg		`json:"progress,omitempty"`
+	Message			string		`json:"message,omitempty"`	//used for error responses
 }
 
 // SvcWrapper is the Pz generic list wrapper, around a list of service objects.
 // It's the response object for a list/search services call
 type SvcWrapper struct {
-	Type       string			`json:"type"`
-	Data       []Service		`json:"data"`
-	Pagination map[string]int	`json:"pagination"`
+	Type       string			`json:"type,omitempty"`
+	Data       []Service		`json:"data,omitempty"`
+	Pagination map[string]int	`json:"pagination,omitempty"`
 }

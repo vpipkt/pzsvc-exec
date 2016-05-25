@@ -69,7 +69,7 @@ func main() {
 	var configObj configType
 	err = json.Unmarshal(configBuf, &configObj)
 	if err != nil {
-		fmt.Println("error:", err)
+		fmt.Println("error:", err.Error())
 	}
 
 	cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
@@ -184,10 +184,10 @@ func main() {
 					fname, err := pzsvc.Download(inFile, runID, configObj.PzAddr, authKey)
 					if err != nil {
 						output.Errors = append(output.Errors,err.Error()+"(3)")
-						fmt.Printf("Download failed.  %s", err.Error())
+						fmt.Printf("Download failed.  %s\n", err.Error())
 					} else {
 						output.InFiles[inFile] = fname
-						fmt.Printf("Successfully downloaded %s.", fname)
+						fmt.Printf("Successfully downloaded %s.\n", fname)
 					}
 				}
 
@@ -224,6 +224,7 @@ func main() {
 				fmt.Printf("Program output: %s\n", output.ProgReturn)
 
 				var attMap map[string]string
+				attMap = make(map[string]string)
 				attMap["algoName"] = configObj.SvcName
 				attMap["algoVersion"] = version
 				attMap["algoCmd"] = configObj.CliCmd + cmdParam
@@ -237,6 +238,7 @@ func main() {
 						fmt.Printf("Upload failed.  %s", err.Error()+"(7)")
 					} else {
 						output.OutFiles[outTiff] = dataID
+						fmt.Printf("Upload complete: %s", dataID)
 					}
 				}
 
@@ -248,6 +250,7 @@ func main() {
 						fmt.Printf("Upload failed.  %s", err.Error()+"(9)")
 					} else {
 						output.OutFiles[outTxt] = dataID
+						fmt.Printf("Upload complete: %s", dataID)
 					}
 				}
 
@@ -259,6 +262,7 @@ func main() {
 						fmt.Printf("Upload failed.  %s", err.Error())
 					} else {
 						output.OutFiles[outGeoJ] = dataID
+						fmt.Printf("Upload complete: %s", dataID)
 					}
 				}
 				printJSON(w, output)
