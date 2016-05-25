@@ -198,7 +198,7 @@ func ingestMultipart(bodyStr, pzAddr, authKey, filename string, fileData []byte)
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-fmt.Println("Getting dataId for job: " + respObj.JobID)
+
 	return getDataID(respObj.JobID, pzAddr, authKey)
 }
 
@@ -219,7 +219,7 @@ func genIngestJSON(	fName, fType, mimeType, cmdName, content, version string,
 	iCall := IngestCall{"defaultUser", jType}	
 	
 	bbuff, err := json.Marshal(iCall)
-fmt.Println(string(bbuff))
+
 	return string(bbuff), err
 }
 
