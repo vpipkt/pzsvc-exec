@@ -265,9 +265,7 @@ func main() {
 						fmt.Printf("Upload complete: %s", dataID)
 					}
 				}
-fmt.Println("about to output.")
 				printJSON(w, output)
-fmt.Println("Done.")
 			}
 		case "/description":
 			if configObj.Description == "" {

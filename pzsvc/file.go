@@ -157,7 +157,7 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-fmt.Println("DataId status check")
+
 		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" || respObj.Message == "Job Not Found" {
 			time.Sleep(200 * time.Millisecond)
 		} else {	
