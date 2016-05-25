@@ -50,7 +50,7 @@ func submitGet(payload, authKey string) (*http.Response, error) {
 
 // submitMultipart sends a multi-part POST call, including an optional uploaded file,
 // and returns the response.  Primarily intended to support Ingest calls.
-func submitMultipart(bodyStr, address, filename, authKey string, file io.Reader) (*http.Response, error) {
+func submitMultipart(bodyStr, address, filename, authKey string, fileData []byte) (*http.Response, error) {
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -60,14 +60,17 @@ func submitMultipart(bodyStr, address, filename, authKey string, file io.Reader)
 		return nil, err
 	}
 
-	if file != nil {
+	if fileData != nil {
 
 		part, err := writer.CreateFormFile("file", filename)
 		if err != nil {
 			return nil, err
 		}
-
-		_, err = io.Copy(part, file)
+		if (part == nil) {
+			return nil, fmt.Errorf("Failure in Form File Creation.")
+		}
+		
+		_, err = io.Copy(part, bytes.NewReader(fileData))
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +131,7 @@ func Download(dataID, subFold, pzAddr, authKey string) (string, error) {
 // until job completion, then acquires and returns the resulting DataId.
 func getDataID(jobID, pzAddr, authKey string) (string, error) {
 
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	for i := 0; i < 100; i++ {
 
@@ -147,14 +150,14 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 			return "", err
 		}
 
-		fmt.Println(respBuf.String())
+		//fmt.Println(respBuf.String())
 
 		var respObj JobResp
 		err = json.Unmarshal(respBuf.Bytes(), &respObj)
 		if err != nil {
 			return "", err
 		}
-
+fmt.Println("DataId status check")
 		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" || respObj.Message == "Job Not Found" {
 			time.Sleep(200 * time.Millisecond)
 		} else {	
@@ -174,9 +177,9 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 // ingestMultipart handles the Pz Ingest process.  It uploads the file to Pz and
 // returns the resulting DataId.
 
-func ingestMultipart(bodyStr, pzAddr, authKey, filename string, file io.Reader) (string, error) {
+func ingestMultipart(bodyStr, pzAddr, authKey, filename string, fileData []byte) (string, error) {
 
-	resp, err := submitMultipart(bodyStr, (pzAddr + "/job"), filename, authKey, file)
+	resp, err := submitMultipart(bodyStr, (pzAddr + "/job"), filename, authKey, fileData)
 	if err != nil {
 		return "", err
 	}
@@ -188,14 +191,14 @@ func ingestMultipart(bodyStr, pzAddr, authKey, filename string, file io.Reader) 
 		return "", err
 	}
 
-	fmt.Println(respBuf.String())
+	//fmt.Println(respBuf.String())
 
 	var respObj JobResp
 	err = json.Unmarshal(respBuf.Bytes(), &respObj)
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-
+fmt.Println("Getting dataId for job: " + respObj.JobID)
 	return getDataID(respObj.JobID, pzAddr, authKey)
 }
 
@@ -204,14 +207,19 @@ func genIngestJSON(	fName, fType, mimeType, cmdName, content, version string,
 					props map[string]string) (string, error) {
 	
 	desc := fmt.Sprintf("%s uploaded by %s.", fType, cmdName)
-	rMeta := ResMeta{fName, desc, &ClassType{"UNCLASSIFIED"}, "POST", version, props} //TODO: implement classification
-	dType := DataType{content, fType, mimeType, nil}
-	dRes := DataResource{&dType, &rMeta, "", nil}
-	jType := IngJobType{"ingest", true, &dRes}
-	iCall := IngestCall{"defaultUser", &jType}	
+	rMeta := ResMeta{fName, desc, ClassType{"UNCLASSIFIED"}, "POST", version, make(map[string]string)} //TODO: implement classification
+	
+	for key, val := range props {
+		rMeta.Metadata[key] = val
+	}
+	
+	dType := DataType{content, fType, mimeType, S3Loc{}}
+	dRes := DataResource{dType, rMeta, "", SpatMeta{}}
+	jType := IngJobType{"ingest", true, dRes}
+	iCall := IngestCall{"defaultUser", jType}	
 	
 	bbuff, err := json.Marshal(iCall)
-	
+fmt.Println(string(bbuff))
 	return string(bbuff), err
 }
 
@@ -224,22 +232,28 @@ func IngestTiffReader (	filename, pzAddr, sourceName, version, authKey string,
 	if err != nil {
 		return "", err
 	}
-	return ingestMultipart(jStr, pzAddr, authKey, filename, inTiff)
+	bSlice, err := ioutil.ReadAll(inTiff)
+	if err != nil {
+		return "", err
+	}	
+	return ingestMultipart(jStr, pzAddr, authKey, filename, bSlice)
 }
 
 // IngestLocalFile finds and loads the local file to be read (if any) then passes the result
 // on to ingestMultipart.
 func ingestLocalFile(bodyStr, subFold, pzAddr, filename, authKey string) (string, error) {
-	var file *os.File
-	file = nil
+	var fileData []byte
+	
 	if 	filename != "" {
 		file, err := os.Open(locString(subFold, filename))
 		if err != nil {
 			return "", err
 		}
-		defer file.Close()		
-	}
-	return ingestMultipart(bodyStr, pzAddr, authKey, filename, file)
+		defer file.Close()
+		
+		fileData, err = ioutil.ReadFile(locString(subFold, filename))
+	}	
+	return ingestMultipart(bodyStr, pzAddr, authKey, filename, fileData)
 }
 
 // IngestLocalTiff constructs and executes the ingest call for a local GeoTIFF, returning the DataId
@@ -273,7 +287,7 @@ func IngestLocalTxt(filename, subFold, pzAddr, cmdName, version, authKey string,
 		return "", err
 	}
 	
-	jStr, err := genIngestJSON(filename, "text", "text/plain", cmdName, strconv.QuoteToASCII(string(textblock)), version, props)
+	jStr, err := genIngestJSON(filename, "text", "application/text", cmdName, strconv.QuoteToASCII(string(textblock)), version, props)
 	if err != nil {
 		return "", nil
 	}
