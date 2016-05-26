@@ -37,16 +37,17 @@ package pzsvc
 // DataResult corresponds to an number of classes, all of which implement interface
 // ResultType.  Of those classes, it currently handles model/job/result/type/DataResult.java
 // and model/job/result/type/FileResult.java.  Other such classes do exist, and would
-// require additional fields.  They may need ot be implemented in the future.
+// require additional fields.  They may need to be implemented in the future.
 type DataResult struct {
-	Type			string		`json:"type"`
-	DataID			string		`json:"dataId"`
+	Type			string		`json:"type,omitempty"`
+	DataID			string		`json:"dataId,omitempty"`
+	Details			string		`json:"details,omitempty"`
 }
 
 // JobProg corresponds to model/job/JobProgress.java.  It does not currently include all
 // of the fields of its counterpart.
 type JobProg struct { //name
-	PercentComplete int			`json:"percentComplete"`
+	PercentComplete int			`json:"percentComplete,omitempty"`
 }
 
 // SpatMeta corresponds to model/job/metadata/SpatialMetadata.java.
