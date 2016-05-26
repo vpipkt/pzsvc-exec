@@ -162,9 +162,9 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 				return respObj.Result.DataID, nil
 			}
 			if respObj.Status == "Error" || respObj.Status == "Fail" {
-				return "", errors.New("Error acquiring DataId: " + respObj.Result.Details)
+				return "", errors.New("Error when acquiring DataId.  Response json: " + respBuf.String())
 			}
-			return "", errors.New("Unknown status.  Response json: " + respBuf.String())
+			return "", errors.New("Unknown status when acquiring DataId.  Response json: " + respBuf.String())
 		}
 	}
 
