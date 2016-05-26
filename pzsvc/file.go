@@ -292,7 +292,6 @@ func IngestLocalTxt(filename, subFold, pzAddr, cmdName, version, authKey string,
 func GetFileMeta(dataID, pzAddr, authKey string) (*DataResource, error) {
 
 	call := fmt.Sprintf(`%s/data/%s`, pzAddr, dataID)
-	
 	resp, err := submitGet(call, authKey)
 	if resp != nil {
 		defer resp.Body.Close()
@@ -300,21 +299,20 @@ func GetFileMeta(dataID, pzAddr, authKey string) (*DataResource, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	respBuf := &bytes.Buffer{}
-		
 	_, err = respBuf.ReadFrom(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	
-	var respObj DataResource
+
+	var respObj IngJobType
 	err = json.Unmarshal(respBuf.Bytes(), &respObj)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
-	return &respObj, nil
+	return &respObj.Data, nil
 }
 
 // UpdateFileMeta updates the metadata for a given dataID in the S3 bucket
