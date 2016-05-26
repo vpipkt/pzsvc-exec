@@ -91,21 +91,24 @@ type S3Loc struct {
 // DataType corresponds to model/data/DataType.java.  It's an occasional
 // misnomer.  In cases where the Content field is not empty, that contains
 // the data that the type is referring to.  In cases where it is empty, the
-// data is attached elsewhere.
+// data is attached elsewhere.  Note that S3Loc is a struct pointer rather
+// than a struct.  If you want to unmarshal JSON into it, you'll need to put
+// an empty S3Loc object there first.
 type DataType struct { //name
 	Content			string		`json:"content,omitempty"`
 	Type			string		`json:"type,omitempty"`
 	MimeType		string		`json:"mimeType,omitempty"`
-	Location		S3Loc		`json:"location,omitempty"`
+	Location		*S3Loc		`json:"location,omitempty"`
 }
 
 // DataResource corresponds to model/data/DataResource.java  It is also
-// used as the response type for Get data/{dataID} calls.
+// used as the response type for Get data/{dataID} calls.  Note that SpatMeta
+// is a pointer rather than a struct, and has the same caveat as DataType.S3Loc
 type DataResource struct {
 	DataType		DataType	`json:"dataType,omitempty"`
 	Metadata		ResMeta		`json:"metadata,omitempty"`
 	DataID			string		`json:"dataId,omitempty"`
-	SpatMeta		SpatMeta	`json:"spatialMetadata,omitempty"`
+	SpatMeta		*SpatMeta	`json:"spatialMetadata,omitempty"`
 }
 
 // IngJobType corresponds to model/job/type/IngestJob.java
