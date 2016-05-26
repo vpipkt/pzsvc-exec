@@ -134,7 +134,6 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 	time.Sleep(200 * time.Millisecond)
 
 	for i := 0; i < 100; i++ {
-
 		resp, err := submitGet(pzAddr + "/job/" + jobID, authKey)
 		if resp != nil {
 			defer resp.Body.Close()
@@ -160,7 +159,8 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 
 		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" || respObj.Message == "Job Not Found" {
 			time.Sleep(200 * time.Millisecond)
-		} else {	
+		} else {
+
 			if respObj.Status == "Success" {
 				return respObj.Result.DataID, nil
 			}
@@ -185,12 +185,10 @@ func ingestMultipart(bodyStr, pzAddr, authKey, filename string, fileData []byte)
 	}
 
 	respBuf := &bytes.Buffer{}
-
 	_, err = respBuf.ReadFrom(resp.Body)
 	if err != nil {
 		return "", err
 	}
-
 	//fmt.Println(respBuf.String())
 
 	var respObj JobResp
@@ -213,29 +211,30 @@ func genIngestJSON(	fName, fType, mimeType, cmdName, content, version string,
 		rMeta.Metadata[key] = val
 	}
 	
-	dType := DataType{content, fType, mimeType, S3Loc{}}
-	dRes := DataResource{dType, rMeta, "", SpatMeta{}}
+	dType := DataType{content, fType, mimeType, nil}
+	dRes := DataResource{dType, rMeta, "", nil}
 	jType := IngJobType{"ingest", true, dRes}
 	iCall := IngestCall{"defaultUser", jType}	
 	
 	bbuff, err := json.Marshal(iCall)
-
+fmt.Println(string(bbuff))
 	return string(bbuff), err
 }
 
 // IngestTiffReader generates and sends an ingest request to Pz, uploading the contents of the
 // given reader as a TIFF file.
 func IngestTiffReader (	filename, pzAddr, sourceName, version, authKey string,
-						inTiff io.Reader, props map[string]string) (string, error) {
-							
+						inTiff io.Reader, props map[string]string) (string, error) {					
 	jStr, err := genIngestJSON(filename, "raster", "image/tiff", sourceName, "", version, props)
 	if err != nil {
 		return "", err
 	}
+				
 	bSlice, err := ioutil.ReadAll(inTiff)
 	if err != nil {
 		return "", err
-	}	
+	}
+					
 	return ingestMultipart(jStr, pzAddr, authKey, filename, bSlice)
 }
 
@@ -275,6 +274,7 @@ func IngestLocalGeoJSON(filename, subFold, pzAddr, cmdName, version, authKey str
 	if err != nil {
 		return "", err	
 	}
+fmt.Println(jStr)
 	return ingestLocalFile(jStr, subFold, pzAddr, filename, authKey)
 }
 
