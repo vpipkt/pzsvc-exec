@@ -61,7 +61,6 @@ func submitMultipart(bodyStr, address, filename, authKey string, fileData []byte
 	}
 
 	if fileData != nil {
-
 		part, err := writer.CreateFormFile("file", filename)
 		if err != nil {
 			return nil, err
@@ -69,7 +68,7 @@ func submitMultipart(bodyStr, address, filename, authKey string, fileData []byte
 		if (part == nil) {
 			return nil, fmt.Errorf("Failure in Form File Creation.")
 		}
-		
+
 		_, err = io.Copy(part, bytes.NewReader(fileData))
 		if err != nil {
 			return nil, err
@@ -94,7 +93,6 @@ func submitMultipart(bodyStr, address, filename, authKey string, fileData []byte
 	if err != nil {
 		return nil, err
 	}
-
 	return resp, err
 }
 
@@ -132,7 +130,6 @@ func Download(dataID, subFold, pzAddr, authKey string) (string, error) {
 func getDataID(jobID, pzAddr, authKey string) (string, error) {
 
 	time.Sleep(200 * time.Millisecond)
-
 	for i := 0; i < 100; i++ {
 		resp, err := submitGet(pzAddr + "/job/" + jobID, authKey)
 		if resp != nil {
@@ -165,7 +162,7 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 				return respObj.Result.DataID, nil
 			}
 			if respObj.Status == "Error" || respObj.Status == "Fail" {
-				return "", errors.New(respObj.Status + ": " + respObj.Message)
+				return "", errors.New("Error acquiring DataId: " + respObj.Result.Details)
 			}
 			return "", errors.New("Unknown status.  Response json: " + respBuf.String())
 		}
@@ -243,13 +240,13 @@ func IngestTiffReader (	filename, pzAddr, sourceName, version, authKey string,
 func ingestLocalFile(bodyStr, subFold, pzAddr, filename, authKey string) (string, error) {
 	var fileData []byte
 	var err error
-	
-	if 	filename != "" {		
+
+	if 	filename != "" {
 		fileData, err = ioutil.ReadFile(locString(subFold, filename))
 		if err != nil {
 			return "", err
 		}
-	}	
+	}
 	return ingestMultipart(bodyStr, pzAddr, authKey, filename, fileData)
 }
 
@@ -272,7 +269,6 @@ func IngestLocalGeoJSON(filename, subFold, pzAddr, cmdName, version, authKey str
 	if err != nil {
 		return "", err	
 	}
-fmt.Println(jStr)
 	return ingestLocalFile(jStr, subFold, pzAddr, filename, authKey)
 }
 
