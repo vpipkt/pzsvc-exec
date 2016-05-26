@@ -167,7 +167,7 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 			if respObj.Status == "Error" || respObj.Status == "Fail" {
 				return "", errors.New(respObj.Status + ": " + respObj.Message)
 			}
-			return "", errors.New("Unknown status: " + respObj.Status)
+			return "", errors.New("Unknown status.  Response json: " + respBuf.String())
 		}
 	}
 
@@ -217,7 +217,7 @@ func genIngestJSON(	fName, fType, mimeType, cmdName, content, version string,
 	iCall := IngestCall{"defaultUser", jType}	
 	
 	bbuff, err := json.Marshal(iCall)
-fmt.Println(string(bbuff))
+	
 	return string(bbuff), err
 }
 
@@ -242,15 +242,13 @@ func IngestTiffReader (	filename, pzAddr, sourceName, version, authKey string,
 // on to ingestMultipart.
 func ingestLocalFile(bodyStr, subFold, pzAddr, filename, authKey string) (string, error) {
 	var fileData []byte
+	var err error
 	
-	if 	filename != "" {
-		file, err := os.Open(locString(subFold, filename))
+	if 	filename != "" {		
+		fileData, err = ioutil.ReadFile(locString(subFold, filename))
 		if err != nil {
 			return "", err
 		}
-		defer file.Close()
-		
-		fileData, err = ioutil.ReadFile(locString(subFold, filename))
 	}	
 	return ingestMultipart(bodyStr, pzAddr, authKey, filename, fileData)
 }
