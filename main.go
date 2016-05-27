@@ -260,20 +260,12 @@ func main() {
 					if err != nil {
 						output.Errors = append(output.Errors, err.Error()+"(10)")
 						fmt.Printf("Upload failed.  %s", err.Error())
-					
-						
-						
-	fileData, _ := ioutil.ReadFile(fmt.Sprintf(`./%s/%s`, runID, outGeoJ))
-	fmt.Fprintf(w, "%s", string(fileData))
-						
-						
-						
 					} else {
 						output.OutFiles[outGeoJ] = dataID
 						fmt.Printf("Upload complete: %s", dataID)
 					}
 				}
-				//printJSON(w, output)
+				printJSON(w, output)
 			}
 		case "/description":
 			if configObj.Description == "" {
