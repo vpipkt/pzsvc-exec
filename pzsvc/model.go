@@ -53,13 +53,14 @@ type JobProg struct { //name
 // SpatMeta corresponds to model/job/metadata/SpatialMetadata.java.
 type SpatMeta struct { //name
 	CoordRefSystem	string		`json:"coordinateReferenceSystem,omitempty"`
-	EpsgCode		string		`json:"epsgCode,omitempty"`
+	EpsgCode		int			`json:"epsgCode,omitempty"`
 	MinX			float64		`json:"minX,omitempty"`
 	MinY			float64		`json:"minY,omitempty"`
 	MinZ			float64		`json:"minZ,omitempty"`
 	MaxX			float64		`json:"maxX,omitempty"`
 	MaxY			float64		`json:"maxY,omitempty"`
 	MaxZ			float64		`json:"maxZ,omitempty"`
+	NumFeatures		int			`json:"numFeatures,omitempty"`
 }
 
 // ClassType corresponds to model.security.SecurityClassification.

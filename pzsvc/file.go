@@ -55,7 +55,7 @@ func submitMultipart(bodyStr, address, filename, authKey string, fileData []byte
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	err := writer.WriteField("body", bodyStr)
+	err := writer.WriteField("data", bodyStr)
 	if err != nil {
 		return nil, err
 	}
@@ -174,13 +174,19 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 // ingestMultipart handles the Pz Ingest process.  It uploads the file to Pz and
 // returns the resulting DataId.
 
-func ingestMultipart(bodyStr, pzAddr, authKey, filename string, fileData []byte) (string, error) {
+func ingest(bodyStr, pzAddr, authKey, filename string, fileData []byte) (string, error) {
 
-	resp, err := submitMultipart(bodyStr, (pzAddr + "/job"), filename, authKey, fileData)
+	var resp *http.Response
+	var err error
+	if (fileData != nil) {
+		resp, err = submitMultipart(bodyStr, (pzAddr + "/data/file"), filename, authKey, fileData)
+	} else {
+		resp, err = SubmitSinglePart("POST", bodyStr, (pzAddr + "/data"), authKey)
+	}
 	if err != nil {
 		return "", err
 	}
-
+		
 	respBuf := &bytes.Buffer{}
 	_, err = respBuf.ReadFrom(resp.Body)
 	if err != nil {
@@ -211,9 +217,9 @@ func genIngestJSON(	fName, fType, mimeType, cmdName, content, version string,
 	dType := DataType{content, fType, mimeType, nil}
 	dRes := DataResource{dType, rMeta, "", nil}
 	jType := IngJobType{"ingest", true, dRes}
-	iCall := IngestCall{"defaultUser", jType}	
+	//iCall := IngestCall{"defaultUser", jType}	
 	
-	bbuff, err := json.Marshal(iCall)
+	bbuff, err := json.Marshal(jType)
 	
 	return string(bbuff), err
 }
@@ -232,7 +238,7 @@ func IngestTiffReader (	filename, pzAddr, sourceName, version, authKey string,
 		return "", err
 	}
 					
-	return ingestMultipart(jStr, pzAddr, authKey, filename, bSlice)
+	return ingest(jStr, pzAddr, authKey, filename, bSlice)
 }
 
 // IngestLocalFile finds and loads the local file to be read (if any) then passes the result
@@ -247,7 +253,7 @@ func ingestLocalFile(bodyStr, subFold, pzAddr, filename, authKey string) (string
 			return "", err
 		}
 	}
-	return ingestMultipart(bodyStr, pzAddr, authKey, filename, fileData)
+	return ingest(bodyStr, pzAddr, authKey, filename, fileData)
 }
 
 // IngestLocalTiff constructs and executes the ingest call for a local GeoTIFF, returning the DataId
@@ -285,14 +291,14 @@ func IngestLocalTxt(filename, subFold, pzAddr, cmdName, version, authKey string,
 	if err != nil {
 		return "", nil
 	}
-	return ingestLocalFile(jStr, "", pzAddr, "", authKey)
+	
+	return ingest(jStr, pzAddr, authKey, filename, nil)
 }
 
 // GetFileMeta retrieves the metadata for a given dataID in the S3 bucket
 func GetFileMeta(dataID, pzAddr, authKey string) (*DataResource, error) {
 
 	call := fmt.Sprintf(`%s/data/%s`, pzAddr, dataID)
-	
 	resp, err := submitGet(call, authKey)
 	if resp != nil {
 		defer resp.Body.Close()
@@ -300,21 +306,20 @@ func GetFileMeta(dataID, pzAddr, authKey string) (*DataResource, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	respBuf := &bytes.Buffer{}
-		
 	_, err = respBuf.ReadFrom(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	
-	var respObj DataResource
+
+	var respObj IngJobType
 	err = json.Unmarshal(respBuf.Bytes(), &respObj)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
-	return &respObj, nil
+	return &respObj.Data, nil
 }
 
 // UpdateFileMeta updates the metadata for a given dataID in the S3 bucket
