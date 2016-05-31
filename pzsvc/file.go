@@ -36,6 +36,8 @@ func locString(subFold, fname string ) string {
 	return fmt.Sprintf(`./%s/%s`, subFold, fname)	
 }
 
+// submitGet is essentially the standard http.Get() call with
+// an additional authKey parameter for Pz access. 
 func submitGet(payload, authKey string) (*http.Response, error) {
 	fileReq, err := http.NewRequest("GET", payload, nil)
 	if err != nil {

@@ -7,14 +7,11 @@
     "Port":8080,
     "Description":"The OSSIM shoreline-determination algorithm, served via piazza",
     "AuthEnVar":"PZ_AUTH",
-    "ImageReqs":{
-        "CloudCover":"10%",
-        "Bands":"3,6",
-        "Coastline":"Yes"
-    },
     "Attributes":{
+        "SvcType":"beachfront",
         "Interface":"pzsvc-exec/ossim",
-        "MaxSize":"2G",
-        "FavColor":"Blue"
+        "imgReq - CloudCover":"10%",
+        "imgReq - Bands":"3,6",
+        "imgReq - Coastline":"Yes"
     }
 }

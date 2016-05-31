@@ -35,12 +35,12 @@ type configType struct {
 	CliCmd      string
 	VersionCmd	string // should have either this or VersionStr - not both.  Meaningless without PzAddr
 	VersionStr	string // should have either this or VersionCmd - not both.  Meaningless without PzAddr
-	PzAddr      string
-	SvcName     string // meaningless without PzAddr, URL
+	PzAddr      string // useless without AuthEnVar
+	AuthEnVar	string // meaningless without PzAddr
+	SvcName     string // meaningless without PzAddr.  Nearly meaningless without URL
 	URL         string // meaningless without PzAddr, SvcName
-	Port        int
+	Port        int // defaults to 8080
 	Description	string
-	AuthEnVar	string // meaningless without PzAddr, URL, SvcName
 	ImageReqs	map[string]string // meaningless without PzAddr, URL, SvcName
 	Attributes	map[string]string // meaningless without PzAddr, URL, SvcName
 }
@@ -282,11 +282,7 @@ func main() {
 		case "/help":
 			fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
 		case "/version":
-
-			b, err := exec.Command(vCmdSlice[0], vCmdSlice[1:]...).Output()
-			if err == nil {
-				fmt.Fprintf(w, string(b))
-			}
+			fmt.Fprintf(w, version)
 			
 		default:
 			fmt.Fprintf(w, "Command undefined.  Try help?\n")
