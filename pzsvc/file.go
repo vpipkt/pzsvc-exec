@@ -36,6 +36,8 @@ func locString(subFold, fname string ) string {
 	return fmt.Sprintf(`./%s/%s`, subFold, fname)	
 }
 
+// submitGet is essentially the standard http.Get() call with
+// an additional authKey parameter for Pz access. 
 func submitGet(payload, authKey string) (*http.Response, error) {
 	fileReq, err := http.NewRequest("GET", payload, nil)
 	if err != nil {
@@ -168,7 +170,7 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 		}
 	}
 
-	return "", errors.New("Never completed.")
+	return "", fmt.Errorf("Never completed.  JobId: %s", jobID)
 }
 
 // ingestMultipart handles the Pz Ingest process.  It uploads the file to Pz and
