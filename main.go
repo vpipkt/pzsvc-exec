@@ -176,10 +176,10 @@ func execute(r *http.Request, cmdConfigSlice []string, configObj configType, aut
 	// reduce a fair bit of code duplication in plowing through
 	// our upload/download lists.  handleFList gets used a fair
 	// bit more after the execute call.
-	downlFunc := func(fname string) (string, error) {
-		return pzsvc.Download(fname, runID, configObj.PzAddr, authKey)
+	downlFunc := func(dataID string) (string, error) {
+		return pzsvc.Download(dataID, runID, configObj.PzAddr, authKey)
 	}
-	handleFList(inFileSlice, downlFunc, &output, "file", "Download")
+	handleFList(inFileSlice, downlFunc, &output)
 
 	if len(cmdSlice) == 0 {
 		output.Errors = append(output.Errors, `No cmd or CliCmd.  Please provide "cmd" param.`)
@@ -218,38 +218,32 @@ func execute(r *http.Request, cmdConfigSlice []string, configObj configType, aut
 	attMap["algoCmd"] = configObj.CliCmd + cmdParam
 	attMap["algoProcTime"] = time.Now().UTC().Format("20060102.150405.99999")
 	
-	// this is the other spot that handleFlist gets used.
-	outTiffFunc := curryUpFunc(pzsvc.IngestLocalTiff, runID, configObj.PzAddr, cmdSlice[0], version, authKey, attMap)
-	handleFList(outTiffSlice, outTiffFunc, &output, "Tiff", "Upload")
-	
-	outTxtFunc := curryUpFunc(pzsvc.IngestLocalTxt, runID, configObj.PzAddr, cmdSlice[0], version, authKey, attMap)
-	handleFList(outTxtSlice, outTxtFunc, &output, "Txt", "Upload")
-	
-	outGeoFunc := curryUpFunc(pzsvc.IngestLocalGeoJSON, runID, configObj.PzAddr, cmdSlice[0], version, authKey, attMap)
-	handleFList(outGeoJSlice, outGeoFunc, &output, "GeoJson", "Upload")
+	// this is the other spot that handleFlist gets used.  It's a bit mroe compicated,
+	// because we want to use it three times with slight changes, but ti works on the
+	// same principles.
+	type uploadFunc func(string, string, string, string, string, string, map[string]string) (string, error)
+	curryFunc := func(uplFunc uploadFunc) curriedUploadFunc {
+		cFunc := func(fname string) (string, error) {
+			return uplFunc(fname, runID, configObj.PzAddr, cmdSlice[0], version, authKey, attMap)
+		}
+		return cFunc	
+	}
+	handleFList(outTiffSlice, curryFunc(pzsvc.IngestLocalTiff), &output)
+	handleFList(outTxtSlice, curryFunc(pzsvc.IngestLocalTxt), &output)
+	handleFList(outGeoJSlice, curryFunc(pzsvc.IngestLocalGeoJSON), &output)
 	
 	return output
 }
 
 type curriedUploadFunc func(string) (string, error)
-type uploadFunc func(string, string, string, string, string, string, map[string]string) (string, error)
-func curryUpFunc (upFunc uploadFunc, runID, pzAddr, baseCmd, version, authKey string, attMap map[string]string) curriedUploadFunc {
-	cFunc := func(fname string) (string, error) {
-		return upFunc(fname, runID, pzAddr, baseCmd, version, authKey, attMap)
-	}
-	return cFunc
-}
 
-func handleFList(upFList []string, upFunc curriedUploadFunc, output *outStruct, fType, dir string) {
-	for i, upF := range upFList {
-		fmt.Printf("%sing %s %s - %d of %d.\n", dir, fType, upF, i, len(upFList))
+func handleFList(upFList []string, upFunc curriedUploadFunc, output *outStruct) {
+	for _, upF := range upFList {
 		dataID, err := upFunc(upF)
 		if err != nil {
-			output.Errors = append(output.Errors, err.Error()+"(10)")
-			fmt.Printf("%s failed.  %s", dir, err.Error())
+			output.Errors = append(output.Errors, err.Error())
 		} else {
 			output.OutFiles[upF] = dataID
-			fmt.Printf("%s complete: %s", dir, dataID)
 		}
 	}
 }
