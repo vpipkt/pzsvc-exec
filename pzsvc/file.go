@@ -131,8 +131,8 @@ func Download(dataID, subFold, pzAddr, authKey string) (string, error) {
 // until job completion, then acquires and returns the resulting DataId.
 func getDataID(jobID, pzAddr, authKey string) (string, error) {
 
-	time.Sleep(200 * time.Millisecond)
-	for i := 0; i < 100; i++ {
+	time.Sleep(1000 * time.Millisecond)
+	for i := 0; i < 800; i++ {
 		resp, err := submitGet(pzAddr + "/job/" + jobID, authKey)
 		if resp != nil {
 			defer resp.Body.Close()
@@ -157,7 +157,7 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 		}
 
 		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" || respObj.Message == "Job Not Found" {
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 		} else {
 
 			if respObj.Status == "Success" {
