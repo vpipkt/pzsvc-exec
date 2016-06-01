@@ -170,7 +170,7 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 		}
 	}
 
-	return "", errors.New("Never completed.")
+	return "", fmt.Errorf("Never completed.  JobId: %s", jobID)
 }
 
 // ingestMultipart handles the Pz Ingest process.  It uploads the file to Pz and
