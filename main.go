@@ -33,15 +33,15 @@ import (
 
 type configType struct {
 	CliCmd      string
-	VersionCmd	string // should have either this or VersionStr - not both.  Meaningless without PzAddr
-	VersionStr	string // should have either this or VersionCmd - not both.  Meaningless without PzAddr
-	PzAddr      string // useless without AuthEnVar
-	AuthEnVar	string // meaningless without PzAddr
-	SvcName     string // meaningless without PzAddr.  Nearly meaningless without URL
-	URL         string // meaningless without PzAddr, SvcName
-	Port        int // defaults to 8080
+	VersionCmd	string
+	VersionStr	string
+	PzAddr      string
+	AuthEnVar	string
+	SvcName     string
+	URL         string
+	Port        int
 	Description	string
-	Attributes	map[string]string // meaningless without PzAddr, URL, SvcName
+	Attributes	map[string]string
 }
 
 type outStruct struct {
@@ -69,6 +69,7 @@ func main() {
 	if err != nil {
 		fmt.Println("error:", err.Error())
 	}
+	canReg, canFile := checkConfig(&configObj)
 
 	authKey := os.Getenv(configObj.AuthEnVar)
 	cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
@@ -88,7 +89,7 @@ func main() {
 		version = string(verB)
 	}
 
-	if configObj.SvcName != "" && configObj.PzAddr != "" && configObj.URL != "" {
+	if canReg {
 		fmt.Println("About to manage registration.")
 		err = pzsvc.ManageRegistration(	configObj.SvcName,
 										configObj.Description,
@@ -103,16 +104,22 @@ func main() {
 		fmt.Println("Registration managed.")
 	}
 	
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		req.ParseForm()
-		switch req.URL.Path {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		switch r.URL.Path {
 		case "/":
-			fmt.Fprintf(w, "hello.")
+			{
+				fmt.Fprintf(w, "Hello.  This is pzsvc-exec")
+				if len(cmdConfigSlice) != 0 {
+					fmt.Fprintf(w, ", running %s", cmdConfigSlice[0])
+				}
+				fmt.Fprintf(w, ".\nWere you possibly looking for the /help or /execute endpoints?")
+			}
 		case "/execute":
 			{
 				// the other options are shallow and informational.  This is the
 				// place where the work gets done.
-				output := execute (req, cmdConfigSlice, configObj, authKey, version)
+				output := execute (w, r, cmdConfigSlice, configObj, authKey, version, canFile)
 				printJSON(w, output)
 			}
 		case "/description":
@@ -128,28 +135,32 @@ func main() {
 				printJSON(w, configObj.Attributes)
 			}
 		case "/help":
-	// might be time to start looking into that "help" thing.
-			fmt.Fprintf(w, "We're sorry, help is not yet implemented.\n")
+			printHelp(w)
 		case "/version":
 			fmt.Fprintf(w, version)
-			
 		default:
-			fmt.Fprintf(w, "Command undefined.  Try help?\n")
+			fmt.Fprintf(w, "Endpoint undefined.  Try /help?\n")
 		}
 	})
 
 	log.Fatal(http.ListenAndServe(portStr, nil))
 }
 
-// execute does the primary work for pzsvc-exec.  Given a request and various blocks fo config data
-func execute(r *http.Request, cmdConfigSlice []string, configObj configType, authKey, version string) outStruct {
+// execute does the primary work for pzsvc-exec.  Given a request and various
+// blocks of config data, it creates a temporary folder to work in, downloads
+// any files indicated in the request (if the configs support it), executes
+// the command indicated by the combination of request and configs, uploads
+// any files indicated by the request (if the configs support it) and cleans
+// up after itself
+func execute(w http.ResponseWriter, r *http.Request, cmdConfigSlice []string, configObj configType, authKey, version string, canFile bool) outStruct {
 
 	var output outStruct
 	output.InFiles = make(map[string]string)
 	output.OutFiles = make(map[string]string)
 
-	if r.Method == "GET" {
-		output.Errors = append(output.Errors, "This endpoint no longer supports GET.  Please try again with POST")
+	if r.Method != "POST" {
+		output.Errors = append(output.Errors, "This endpoint does not support that method.  Please try again with POST.")
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return output
 	}
 
@@ -161,16 +172,22 @@ func execute(r *http.Request, cmdConfigSlice []string, configObj configType, aut
 	outTiffSlice := splitOrNil(r.FormValue("outTiffs"), ",")
 	outTxtSlice := splitOrNil(r.FormValue("outTxts"), ",")
 	outGeoJSlice := splitOrNil(r.FormValue("outGeoJson"), ",")
+	
+	if !canFile && (len(inFileSlice) + len(outTiffSlice) + len(outTxtSlice) + len(outGeoJSlice) != 0) {
+		output.Errors = append(output.Errors, "Cannot complete.  File up/download not enabled in config file.")
+		w.WriteHeader(http.StatusForbidden)
+		return output
+	}
 
 	runID, err := psuUUID()
-	handleError(output.Errors, err)
+	handleError(&output, err, w, http.StatusInternalServerError)
 
 	err = os.Mkdir("./"+runID, 0777)
-	handleError(output.Errors, err)
+	handleError(&output, err, w, http.StatusInternalServerError)
 	defer os.RemoveAll("./" + runID)
 
 	err = os.Chmod("./"+runID, 0777)
-	handleError(output.Errors, err)
+	handleError(&output, err, w, http.StatusInternalServerError)
 
 	// this is done to enable use of handleFList, which lets us
 	// reduce a fair bit of code duplication in plowing through
@@ -179,10 +196,11 @@ func execute(r *http.Request, cmdConfigSlice []string, configObj configType, aut
 	downlFunc := func(dataID string) (string, error) {
 		return pzsvc.Download(dataID, runID, configObj.PzAddr, authKey)
 	}
-	handleFList(inFileSlice, downlFunc, &output)
+	handleFList(inFileSlice, downlFunc, &output, output.InFiles, w)
 
 	if len(cmdSlice) == 0 {
 		output.Errors = append(output.Errors, `No cmd or CliCmd.  Please provide "cmd" param.`)
+		w.WriteHeader(http.StatusBadRequest)
 		return output
 	}
 
@@ -206,7 +224,7 @@ func execute(r *http.Request, cmdConfigSlice []string, configObj configType, aut
 	clc.Stderr = os.Stderr
 
 	err = clc.Run()
-	handleError(output.Errors, err)
+	handleError(&output, err, w, http.StatusBadRequest)
 	
 	output.ProgReturn = b.String()
 				
@@ -228,31 +246,33 @@ func execute(r *http.Request, cmdConfigSlice []string, configObj configType, aut
 		}
 		return cFunc	
 	}
-	handleFList(outTiffSlice, curryFunc(pzsvc.IngestLocalTiff), &output)
-	handleFList(outTxtSlice, curryFunc(pzsvc.IngestLocalTxt), &output)
-	handleFList(outGeoJSlice, curryFunc(pzsvc.IngestLocalGeoJSON), &output)
+	handleFList(outTiffSlice, curryFunc(pzsvc.IngestLocalTiff), &output, output.OutFiles, w)
+	handleFList(outTxtSlice, curryFunc(pzsvc.IngestLocalTxt), &output, output.OutFiles, w)
+	handleFList(outGeoJSlice, curryFunc(pzsvc.IngestLocalGeoJSON), &output, output.OutFiles, w)
 	
 	return output
 }
 
 type curriedUploadFunc func(string) (string, error)
 
-func handleFList(upFList []string, upFunc curriedUploadFunc, output *outStruct) {
+func handleFList(upFList []string, upFunc curriedUploadFunc, output *outStruct, fileRec map[string]string, w http.ResponseWriter) {
 	for _, upF := range upFList {
 		dataID, err := upFunc(upF)
 		if err != nil {
 			output.Errors = append(output.Errors, err.Error())
+			w.WriteHeader(http.StatusBadRequest)
 		} else {
-			output.OutFiles[upF] = dataID
+			fileRec[upF] = dataID
 		}
 	}
 }
 
-func handleError(errorSlice []string, err error) []string{
-	if (err == nil) {
-		return errorSlice
+func handleError(output *outStruct, err error, w http.ResponseWriter, httpStat int) {
+	if (err != nil) {
+		output.Errors = append(output.Errors, err.Error())
+		w.WriteHeader(httpStat)
 	}
-	return append(errorSlice, err.Error())
+	return
 }
 
 func splitOrNil(inString, knife string) []string {
@@ -279,4 +299,85 @@ func printJSON(w http.ResponseWriter, output interface{}) {
 	}
 
 	fmt.Fprintf(w, "%s", string(outBuf))
+}
+
+// checkConfig takes an input config file, checks it over for issues,
+// and outputs any issues or concerns to std.out.  It returns whether
+// or not the config file permits autoregistration, and whether or not
+// it permits file upload/download.
+func checkConfig (configObj *configType) (bool, bool) {
+	canReg := true
+	canFile := true
+	if configObj.CliCmd == "" {
+		fmt.Println(`Config: Warning: CliCmd is blank.  This is a major security vulnerability.`)
+	}
+	
+	if configObj.PzAddr == "" {
+		fmt.Println(`Config: PzAddr not specified.  Autoregistration and file upload/download disabled.`)
+		canReg = false
+		canFile = false
+	} else if configObj.AuthEnVar == "" {
+		fmt.Println(`Config: AuthEnVar not specified.  Autoregistration and file upload/download disabled.`)
+		canReg = false
+		canFile = false
+	} else if configObj.SvcName == "" {
+		fmt.Println(`Config: SvcName not specified.  Autoregistration disabled.`)
+		canReg = false
+	} else if configObj.URL == "" {
+		fmt.Println(`Config: URL not specified for this service.  Autoregistration disabled.`)
+		canReg = false
+	}
+	
+	if !canFile {
+		if configObj.PzAddr != "" {
+			fmt.Println(`Config: PzAddr was specified, but is meaningless without upload/download/autoregistration.`)
+		}
+		if configObj.VersionCmd != "" {
+			fmt.Println(`Config: VersionCmd was specified, but is meaningless without upload/download/autoregistration.`)
+		}
+		if configObj.VersionStr != "" {
+			fmt.Println(`Config: VersionStr was specified, but is meaningless without upload/download/autoregistration.`)
+		}
+		if configObj.AuthEnVar != "" {
+			fmt.Println(`Config: AuthEnVar was specified, but is meaningless without upload/download/autoregistration.`)
+		}	
+	} else {
+		if configObj.VersionCmd == "" && configObj.VersionStr == "" {
+			fmt.Println(`Config: neither VersionCmd nor VersionStr was specified.  Version will be left blank.`)
+		}
+		if configObj.VersionCmd != "" && configObj.VersionStr != "" {
+			fmt.Println(`Config: Both VersionCmd and VersionStr were specified.  Redundant.  Default to VersionCmd.`)
+		}
+	}
+	
+	if !canReg {
+		if configObj.SvcName != "" {
+			fmt.Println(`Config: SvcName was specified, but is meaningless without autoregistration.`)
+		}
+		if configObj.URL != "" {
+			fmt.Println(`Config: URL was specified, but is meaningless without autoregistration.`)
+		}
+	} else {
+		if configObj.Description == "" {
+			fmt.Println(`Config: Description not specified.  When autoregistering, descriptions are strongly encouraged.`)
+		}
+	}
+
+	if configObj.Port <= 0 {
+		fmt.Println(`Config: Port not specified, or incorrect format.  Default to 8080.`)
+	}
+	
+	return canReg, canFile
+}
+
+func printHelp(w http.ResponseWriter) {
+	fmt.Fprintln(w, `pzsvc-exec endpoints as follows:`)
+	fmt.Fprintln(w, `- '/': entry point.  Displays base command if any, and suggests other endpoints.`)
+	fmt.Fprintln(w, `- '/execute': The meat of the program.  Downloads files, executes on them, and uploads the results.`)
+	fmt.Fprintln(w, `See the Service Request Format section of the Readme for interface details.`)
+	fmt.Fprintln(w, `(Readme available at https://github.com/venicegeo/pzsvc-exec).`)
+	fmt.Fprintln(w, `- '/description': When enabled, provides a description of this particular pzsvc-exec instance.`)
+	fmt.Fprintln(w, `- '/attributes': When enabled, provides a list of key/value attributes for this pzsvc-exec instance.`)
+	fmt.Fprintln(w, `- '/version': When enabled, provides version number for the application served by this pzsvc-exec instance.`)
+	fmt.Fprintln(w, `- '/help': This screen.`)
 }
