@@ -72,22 +72,12 @@ func main() {
 	canReg, canFile := checkConfig(&configObj)
 
 	authKey := os.Getenv(configObj.AuthEnVar)
-	cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
 	if configObj.Port <= 0 {
 		configObj.Port = 8080
 	}
 	portStr := ":" + strconv.Itoa(configObj.Port)
 	
-	version := configObj.VersionStr
-	vCmdSlice := splitOrNil(configObj.VersionCmd, " ")
-	if vCmdSlice != nil {
-		vCmd := exec.Command (vCmdSlice[0], vCmdSlice[1:]...)
-		verB, err := vCmd.Output()
-		if err != nil {
-			fmt.Println("error: VersionCmd failed: " + err.Error())
-		}
-		version = string(verB)
-	}
+	version := getVersion(configObj)
 
 	if canReg {
 		fmt.Println("About to manage registration.")
@@ -110,8 +100,8 @@ func main() {
 		case "/":
 			{
 				fmt.Fprintf(w, "Hello.  This is pzsvc-exec")
-				if len(cmdConfigSlice) != 0 {
-					fmt.Fprintf(w, ", running %s", cmdConfigSlice[0])
+				if configObj.SvcName != "" {
+					fmt.Fprintf(w, ", serving %s", configObj.SvcName)
 				}
 				fmt.Fprintf(w, ".\nWere you possibly looking for the /help or /execute endpoints?")
 			}
@@ -119,7 +109,7 @@ func main() {
 			{
 				// the other options are shallow and informational.  This is the
 				// place where the work gets done.
-				output := execute (w, r, cmdConfigSlice, configObj, authKey, version, canFile)
+				output := execute (w, r, configObj, authKey, version, canFile)
 				printJSON(w, output)
 			}
 		case "/description":
@@ -152,7 +142,7 @@ func main() {
 // the command indicated by the combination of request and configs, uploads
 // any files indicated by the request (if the configs support it) and cleans
 // up after itself
-func execute(w http.ResponseWriter, r *http.Request, cmdConfigSlice []string, configObj configType, authKey, version string, canFile bool) outStruct {
+func execute(w http.ResponseWriter, r *http.Request, configObj configType, authKey, version string, canFile bool) outStruct {
 
 	var output outStruct
 	output.InFiles = make(map[string]string)
@@ -166,6 +156,7 @@ func execute(w http.ResponseWriter, r *http.Request, cmdConfigSlice []string, co
 
 	cmdParam := r.FormValue("cmd")
 	cmdParamSlice := splitOrNil(cmdParam, " ")
+	cmdConfigSlice := splitOrNil(configObj.CliCmd, " ")
 	cmdSlice := append(cmdConfigSlice, cmdParamSlice...)
 
 	inFileSlice := splitOrNil(r.FormValue("inFiles"), ",")
@@ -233,11 +224,11 @@ func execute(w http.ResponseWriter, r *http.Request, cmdConfigSlice []string, co
 	attMap := make(map[string]string)
 	attMap["algoName"] = configObj.SvcName
 	attMap["algoVersion"] = version
-	attMap["algoCmd"] = configObj.CliCmd + cmdParam
+	attMap["algoCmd"] = configObj.CliCmd + " " + cmdParam
 	attMap["algoProcTime"] = time.Now().UTC().Format("20060102.150405.99999")
 	
-	// this is the other spot that handleFlist gets used.  It's a bit mroe compicated,
-	// because we want to use it three times with slight changes, but ti works on the
+	// this is the other spot that handleFlist gets used.  It's a bit more compicated,
+	// because we want to use it three times with slight changes, but it works on the
 	// same principles.
 	type uploadFunc func(string, string, string, string, string, string, map[string]string) (string, error)
 	curryFunc := func(uplFunc uploadFunc) curriedUploadFunc {
@@ -299,6 +290,19 @@ func printJSON(w http.ResponseWriter, output interface{}) {
 	}
 
 	fmt.Fprintf(w, "%s", string(outBuf))
+}
+
+func getVersion(configObj configType) string {
+	vCmdSlice := splitOrNil(configObj.VersionCmd, " ")
+	if vCmdSlice != nil {
+		vCmd := exec.Command (vCmdSlice[0], vCmdSlice[1:]...)
+		verB, err := vCmd.Output()
+		if err != nil {
+			fmt.Println("error: VersionCmd failed: " + err.Error())
+		}
+		return string(verB)
+	}
+	return configObj.VersionStr
 }
 
 // checkConfig takes an input config file, checks it over for issues,
