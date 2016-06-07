@@ -148,23 +148,21 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 			return "", err
 		}
 
-		//fmt.Println(respBuf.String())
-
 		var respObj JobResp
 		err = json.Unmarshal(respBuf.Bytes(), &respObj)
 		if err != nil {
 			return "", err
 		}
 
-		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" || respObj.Message == "Job Not Found" {
+		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" || respObj.Status == "Error" {
 			time.Sleep(300 * time.Millisecond)
 		} else {
 
 			if respObj.Status == "Success" {
 				return respObj.Result.DataID, nil
 			}
-			if respObj.Status == "Error" || respObj.Status == "Fail" {
-				return "", errors.New("Error when acquiring DataId.  Response json: " + respBuf.String())
+			if respObj.Status == "Fail" {
+				return "", errors.New("Piazza failure when acquiring DataId.  Response json: " + respBuf.String())
 			}
 			return "", errors.New("Unknown status when acquiring DataId.  Response json: " + respBuf.String())
 		}
