@@ -184,7 +184,7 @@ func execute(w http.ResponseWriter, r *http.Request, configObj configType, authK
 	}
 
 	if authKey == "" && (len(inFileSlice) + len(outTiffSlice) + len(outTxtSlice) + len(outGeoJSlice) != 0) {
-		output.Errors = append(output.Errors, "Cannot complete.  File up/download not enabled in config file.")
+		output.Errors = append(output.Errors, "Cannot complete.  Auth Key not available.")
 		w.WriteHeader(http.StatusForbidden)
 		return output
 	}
