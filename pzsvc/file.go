@@ -135,7 +135,7 @@ func Download(dataID, subFold, pzAddr, authKey string) (string, error) {
 func getDataID(jobID, pzAddr, authKey string) (string, error) {
 
 	time.Sleep(1000 * time.Millisecond)
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 300; i++ { // will wait up to 1.5 minutes
 		resp, err := submitGet(pzAddr + "/job/" + jobID, authKey)
 		if resp != nil {
 			defer resp.Body.Close()
