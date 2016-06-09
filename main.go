@@ -185,6 +185,7 @@ func execute(w http.ResponseWriter, r *http.Request, configObj configType, authK
 	// our upload/download lists.  handleFList gets used a fair
 	// bit more after the execute call.
 	downlFunc := func(dataID string) (string, error) {
+output.Errors = append(output.Errors, (fmt.Sprintf(`not an error: Download attempt: DataID: %s, runID %s pzAddr: %s, authKey %s`, dataID, runID, configObj.PzAddr, authKey)))
 		return pzsvc.Download(dataID, runID, configObj.PzAddr, authKey)
 	}
 	handleFList(inFileSlice, downlFunc, &output, output.InFiles, w)
