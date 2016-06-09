@@ -71,7 +71,16 @@ func main() {
 	}
 	canReg, canFile := checkConfig(&configObj)
 
-	authKey := os.Getenv(configObj.AuthEnVar)
+	var authKey string
+	if canFile || canReg {
+		authKey = os.Getenv(configObj.AuthEnVar)
+		if authKey == "" {
+			fmt.Println("Error: no auth key at AuthEnVar.  Registration and upload/download disabled.")
+		}
+		canFile = false
+		canReg = false
+	}
+
 	if configObj.Port <= 0 {
 		configObj.Port = 8080
 	}
@@ -165,7 +174,7 @@ func execute(w http.ResponseWriter, r *http.Request, configObj configType, authK
 	outGeoJSlice := splitOrNil(r.FormValue("outGeoJson"), ",")
 	
 	if !canFile && (len(inFileSlice) + len(outTiffSlice) + len(outTxtSlice) + len(outGeoJSlice) != 0) {
-		output.Errors = append(output.Errors, "Cannot complete.  File up/download not enabled in config file.")
+		output.Errors = append(output.Errors, "Cannot complete.  File up/download not enabled in config file, or auth key not provided at AuthEnvVar.")
 		w.WriteHeader(http.StatusForbidden)
 		return output
 	}
