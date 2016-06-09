@@ -113,7 +113,10 @@ func Download(dataID, subFold, pzAddr, authKey string) (string, error) {
 	_, params, err := mime.ParseMediaType(contDisp)
 	filename := params["filename"]
 	if filename == "" {
-		return "", fmt.Errorf(`File for DataID %s unnamed.  Probable ingest error.`, dataID)
+		b := make([]byte, 100)
+		resp.Body.Read(b)
+		
+		return "", fmt.Errorf(`File for DataID %s unnamed.  Probable ingest error.  Initial response characters: %s`, dataID, string(b))
 	}
 	
 	out, err := os.Create(locString(subFold, filename))
@@ -153,7 +156,7 @@ func getDataID(jobID, pzAddr, authKey string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-
+if respObj.Status == "Error" {fmt.Println(respBuf.String())}
 		if respObj.Status == "Submitted" || respObj.Status == "Running" || respObj.Status == "Pending" || respObj.Status == "Error" {
 			time.Sleep(300 * time.Millisecond)
 		} else {
