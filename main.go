@@ -69,15 +69,15 @@ func main() {
 	if err != nil {
 		fmt.Println("error:", err.Error())
 	}
-	canReg, canFile := checkConfig(&configObj)
+	canReg, canFile, hasAuth := checkConfig(&configObj)
 
 	var authKey string
-	if canFile || canReg {
+	if hasAuth {
 		authKey = os.Getenv(configObj.AuthEnVar)
 		if authKey == "" {
-			fmt.Println("Error: no auth key at AuthEnVar.  Registration and upload/download disabled.")
+			fmt.Println("Error: no auth key at AuthEnVar.  Registration disabled, and client will have to provide authKey.")
 		}
-		canFile = false
+		hasAuth = false
 		canReg = false
 	}
 
@@ -173,8 +173,18 @@ func execute(w http.ResponseWriter, r *http.Request, configObj configType, authK
 	outTxtSlice := splitOrNil(r.FormValue("outTxts"), ",")
 	outGeoJSlice := splitOrNil(r.FormValue("outGeoJson"), ",")
 	
+	if 	r.FormValue("authKey") != "" {
+		authKey = r.FormValue("authKey")
+	}
+
 	if !canFile && (len(inFileSlice) + len(outTiffSlice) + len(outTxtSlice) + len(outGeoJSlice) != 0) {
-		output.Errors = append(output.Errors, "Cannot complete.  File up/download not enabled in config file, or auth key not provided at AuthEnvVar.")
+		output.Errors = append(output.Errors, "Cannot complete.  File up/download not enabled in config file.")
+		w.WriteHeader(http.StatusForbidden)
+		return output
+	}
+
+	if authKey == "" && (len(inFileSlice) + len(outTiffSlice) + len(outTxtSlice) + len(outGeoJSlice) != 0) {
+		output.Errors = append(output.Errors, "Cannot complete.  Auth Key not available.")
 		w.WriteHeader(http.StatusForbidden)
 		return output
 	}
@@ -318,21 +328,23 @@ func getVersion(configObj configType) string {
 // and outputs any issues or concerns to std.out.  It returns whether
 // or not the config file permits autoregistration, and whether or not
 // it permits file upload/download.
-func checkConfig (configObj *configType) (bool, bool) {
+func checkConfig (configObj *configType) (bool, bool, bool) {
 	canReg := true
 	canFile := true
+	hasAuth := true
 	if configObj.CliCmd == "" {
 		fmt.Println(`Config: Warning: CliCmd is blank.  This is a major security vulnerability.`)
 	}
 	
 	if configObj.PzAddr == "" {
 		fmt.Println(`Config: PzAddr not specified.  Autoregistration and file upload/download disabled.`)
-		canReg = false
 		canFile = false
+		hasAuth = false
+		canReg = false
 	} else if configObj.AuthEnVar == "" {
-		fmt.Println(`Config: AuthEnVar not specified.  Autoregistration and file upload/download disabled.`)
+		fmt.Println(`Config: AuthEnVar was not specified.  Client will have to provide authKey.  Autoregistration disabled.`)
+		hasAuth = false
 		canReg = false
-		canFile = false
 	} else if configObj.SvcName == "" {
 		fmt.Println(`Config: SvcName not specified.  Autoregistration disabled.`)
 		canReg = false
@@ -380,7 +392,7 @@ func checkConfig (configObj *configType) (bool, bool) {
 		fmt.Println(`Config: Port not specified, or incorrect format.  Default to 8080.`)
 	}
 	
-	return canReg, canFile
+	return canReg, canFile, hasAuth
 }
 
 func printHelp(w http.ResponseWriter) {
