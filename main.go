@@ -76,9 +76,9 @@ func main() {
 		authKey = os.Getenv(configObj.AuthEnVar)
 		if authKey == "" {
 			fmt.Println("Error: no auth key at AuthEnVar.  Registration disabled, and client will have to provide authKey.")
+			hasAuth = false
+			canReg = false
 		}
-		hasAuth = false
-		canReg = false
 	}
 
 	if configObj.Port <= 0 {
