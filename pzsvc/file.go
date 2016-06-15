@@ -25,7 +25,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -96,6 +95,26 @@ func submitMultipart(bodyStr, address, filename, authKey string, fileData []byte
 		return nil, err
 	}
 	return resp, err
+}
+
+// DownloadBytes retrieves a file from Pz using the file access API and then
+// returns the results as a byte slice
+func DownloadBytes(dataID, pzAddr, authKey string) ([]byte, error) {
+
+	resp, err := submitGet(pzAddr + "/file/" + dataID, authKey)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }
 
 // Download retrieves a file from Pz using the file access API
@@ -174,17 +193,49 @@ if respObj.Status == "Error" {fmt.Println(respBuf.String())}
 	return "", fmt.Errorf("Never completed.  JobId: %s", jobID)
 }
 
-// ingestMultipart handles the Pz Ingest process.  It uploads the file to Pz and
-// returns the resulting DataId.
+// Ingest ingests the given bytes to Pz.  
+func Ingest(fName, fType, pzAddr, sourceName, version, authKey string,
+			ingData []byte,
+			props map[string]string) (string, error) {
 
-func ingest(bodyStr, pzAddr, authKey, filename string, fileData []byte) (string, error) {
-
+	var fileData []byte
 	var resp *http.Response
-	var err error
+
+	desc := fmt.Sprintf("%s uploaded by %s.", fType, sourceName)
+	rMeta := ResMeta{fName, desc, ClassType{"UNCLASSIFIED"}, "POST", version, make(map[string]string)} //TODO: implement classification
+	for key, val := range props {
+		rMeta.Metadata[key] = val
+	}
+
+	dType := DataType{"", fType, "", nil}
+
+	switch fType {
+		case "raster" : {
+			dType.MimeType = "image/tiff"
+			fileData = ingData
+		}
+		case "geojson" : {
+			dType.MimeType = "application/vnd.geo+json"
+			fileData = ingData
+		}
+		case "text" : {
+			dType.MimeType = "application/text"
+			dType.Content = string(ingData)
+			fileData = nil
+		}
+	}
+
+	dRes := DataResource{dType, rMeta, "", nil}
+	jType := IngJobType{"ingest", true, dRes}
+	bbuff, err := json.Marshal(jType)
+	if err != nil {
+		return "", err
+	}
+
 	if (fileData != nil) {
-		resp, err = submitMultipart(bodyStr, (pzAddr + "/data/file"), filename, authKey, fileData)
+		resp, err = submitMultipart(string(bbuff), (pzAddr + "/data/file"), fName, authKey, fileData)
 	} else {
-		resp, err = SubmitSinglePart("POST", bodyStr, (pzAddr + "/data"), authKey)
+		resp, err = SubmitSinglePart("POST", string(bbuff), (pzAddr + "/data"), authKey)
 	}
 	if err != nil {
 		return "", err
@@ -195,7 +246,6 @@ func ingest(bodyStr, pzAddr, authKey, filename string, fileData []byte) (string,
 	if err != nil {
 		return "", err
 	}
-	//fmt.Println(respBuf.String())
 
 	var respObj JobResp
 	err = json.Unmarshal(respBuf.Bytes(), &respObj)
@@ -206,96 +256,15 @@ func ingest(bodyStr, pzAddr, authKey, filename string, fileData []byte) (string,
 	return getDataID(respObj.JobID, pzAddr, authKey)
 }
 
-// genIngestJson constructs and returns the JSON for a Pz ingest call.
-func genIngestJSON(	fName, fType, mimeType, cmdName, content, version string,
-					props map[string]string) (string, error) {
-	
-	desc := fmt.Sprintf("%s uploaded by %s.", fType, cmdName)
-	rMeta := ResMeta{fName, desc, ClassType{"UNCLASSIFIED"}, "POST", version, make(map[string]string)} //TODO: implement classification
-	
-	for key, val := range props {
-		rMeta.Metadata[key] = val
-	}
-	
-	dType := DataType{content, fType, mimeType, nil}
-	dRes := DataResource{dType, rMeta, "", nil}
-	jType := IngJobType{"ingest", true, dRes}
-	//iCall := IngestCall{"defaultUser", jType}	
-	
-	bbuff, err := json.Marshal(jType)
-	
-	return string(bbuff), err
-}
+// IngestFile ingests the given file
+func IngestFile(fName, subFold, fType, pzAddr, sourceName, version, authKey string,
+				props map[string]string) (string, error) {
 
-// IngestTiffReader generates and sends an ingest request to Pz, uploading the contents of the
-// given reader as a TIFF file.
-func IngestTiffReader (	filename, pzAddr, sourceName, version, authKey string,
-						inTiff io.Reader, props map[string]string) (string, error) {					
-	jStr, err := genIngestJSON(filename, "raster", "image/tiff", sourceName, "", version, props)
+	fData, err := ioutil.ReadFile(locString(subFold, fName))
 	if err != nil {
 		return "", err
 	}
-				
-	bSlice, err := ioutil.ReadAll(inTiff)
-	if err != nil {
-		return "", err
-	}
-					
-	return ingest(jStr, pzAddr, authKey, filename, bSlice)
-}
-
-// IngestLocalFile finds and loads the local file to be read (if any) then passes the result
-// on to ingestMultipart.
-func ingestLocalFile(bodyStr, subFold, pzAddr, filename, authKey string) (string, error) {
-	var fileData []byte
-	var err error
-
-	if 	filename != "" {
-		fileData, err = ioutil.ReadFile(locString(subFold, filename))
-		if err != nil {
-			return "", err
-		}
-	}
-	return ingest(bodyStr, pzAddr, authKey, filename, fileData)
-}
-
-// IngestLocalTiff constructs and executes the ingest call for a local GeoTIFF, returning the DataId
-func IngestLocalTiff(filename, subFold, pzAddr, cmdName, version, authKey string,
-					 props map[string]string) (string, error) {
-						 
-	jStr, err := genIngestJSON(filename, "raster", "image/tiff", cmdName, "", version, props)
-	if err != nil {
-		return "", err
-	}
-	return ingestLocalFile(jStr, subFold, pzAddr, filename, authKey)
-}
-
-// IngestLocalGeoJSON constructs and executes the ingest call for a local GeoJson, returning the DataId
-func IngestLocalGeoJSON(filename, subFold, pzAddr, cmdName, version, authKey string,
-						props map[string]string) (string, error) {
-
-	jStr, err := genIngestJSON(filename, "geojson", "application/vnd.geo+json", cmdName, "", version, props)
-	if err != nil {
-		return "", err	
-	}
-	return ingestLocalFile(jStr, subFold, pzAddr, filename, authKey)
-}
-
-// IngestLocalTxt constructs and executes the ingest call for a local text file, returning the DataId
-func IngestLocalTxt(filename, subFold, pzAddr, cmdName, version, authKey string,
-					props map[string]string) (string, error) {
-	
-	textblock, err := ioutil.ReadFile(locString(subFold, filename))
-	if err != nil {
-		return "", err
-	}
-	
-	jStr, err := genIngestJSON(filename, "text", "application/text", cmdName, strconv.QuoteToASCII(string(textblock)), version, props)
-	if err != nil {
-		return "", nil
-	}
-	
-	return ingest(jStr, pzAddr, authKey, filename, nil)
+	return Ingest(fName, fType, pzAddr, sourceName, version, authKey, fData, props)
 }
 
 // GetFileMeta retrieves the metadata for a given dataID in the S3 bucket

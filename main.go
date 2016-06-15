@@ -203,10 +203,10 @@ func execute(w http.ResponseWriter, r *http.Request, configObj configType, authK
 	// reduce a fair bit of code duplication in plowing through
 	// our upload/download lists.  handleFList gets used a fair
 	// bit more after the execute call.
-	downlFunc := func(dataID string) (string, error) {
+	downlFunc := func(dataID, fType string) (string, error) {
 		return pzsvc.Download(dataID, runID, configObj.PzAddr, authKey)
 	}
-	handleFList(inFileSlice, downlFunc, &output, output.InFiles, w)
+	handleFList(inFileSlice, downlFunc, "", &output, output.InFiles, w)
 
 	if len(cmdSlice) == 0 {
 		output.Errors = append(output.Errors, `No cmd or CliCmd.  Please provide "cmd" param.`)
@@ -246,33 +246,30 @@ func execute(w http.ResponseWriter, r *http.Request, configObj configType, authK
 	attMap["algoCmd"] = configObj.CliCmd + " " + cmdParam
 	attMap["algoProcTime"] = time.Now().UTC().Format("20060102.150405.99999")
 	
-	// this is the other spot that handleFlist gets used.  It's a bit more compicated,
-	// because we want to use it three times with slight changes, but it works on the
+	// this is the other spot that handleFlist gets used, and works on the
 	// same principles.
-	type uploadFunc func(string, string, string, string, string, string, map[string]string) (string, error)
-	curryFunc := func(uplFunc uploadFunc) curriedUploadFunc {
-		cFunc := func(fname string) (string, error) {
-			return uplFunc(fname, runID, configObj.PzAddr, cmdSlice[0], version, authKey, attMap)
-		}
-		return cFunc	
+
+	ingFunc := func(fName, fType string) (string, error) {
+		return pzsvc.IngestFile(fName, runID, fType, configObj.PzAddr, configObj.SvcName, version, authKey, attMap)
 	}
-	handleFList(outTiffSlice, curryFunc(pzsvc.IngestLocalTiff), &output, output.OutFiles, w)
-	handleFList(outTxtSlice, curryFunc(pzsvc.IngestLocalTxt), &output, output.OutFiles, w)
-	handleFList(outGeoJSlice, curryFunc(pzsvc.IngestLocalGeoJSON), &output, output.OutFiles, w)
+
+	handleFList(outTiffSlice, ingFunc, "raster", &output, output.OutFiles, w)
+	handleFList(outTxtSlice, ingFunc, "text", &output, output.OutFiles, w)
+	handleFList(outGeoJSlice, ingFunc, "geojson", &output, output.OutFiles, w)
 	
 	return output
 }
 
-type curriedUploadFunc func(string) (string, error)
+type rangeFunc func(string, string) (string, error)
 
-func handleFList(upFList []string, upFunc curriedUploadFunc, output *outStruct, fileRec map[string]string, w http.ResponseWriter) {
-	for _, upF := range upFList {
-		dataID, err := upFunc(upF)
+func handleFList(fList []string, lFunc rangeFunc, fType string, output *outStruct, fileRec map[string]string, w http.ResponseWriter) {
+	for _, f := range fList {
+		outStr, err := lFunc(f, fType)
 		if err != nil {
 			output.Errors = append(output.Errors, err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 		} else {
-			fileRec[upF] = dataID
+			fileRec[f] = outStr
 		}
 	}
 }
