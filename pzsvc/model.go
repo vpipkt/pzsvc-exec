@@ -75,7 +75,6 @@ type ResMeta struct {
 	Name			string		`json:"name,omitempty"`
 	Description		string		`json:"description,omitempty"`
 	ClassType		ClassType	`json:"classType,omitempty"`
-	Method			string		`json:"method,omitempty"`
 	Version			string		`json:"version,omitempty"`
 	Metadata		map[string]string `json:"metadata,omitempty"`
 }
@@ -137,7 +136,9 @@ type ExecService struct {
 // Also used in the response to the List Service job.
 type Service struct {
 	ServiceID		string		`json:"serviceId,omitempty"`
-	URL				string		`json:"url,omitempty"`
+	URL			string		`json:"url,omitempty"`
+	ContractUrl		string 		`json:"contractUrl,omitempty"`
+	RestMethod		string 		`json:"method,omitempty"`
 	ResMeta			ResMeta		`json:"resourceMetadata,omitempty"`
 }
 

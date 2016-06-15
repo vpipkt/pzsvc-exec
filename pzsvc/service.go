@@ -97,11 +97,11 @@ func ManageRegistration(svcName, svcDesc, svcURL, pzAddr, svcVers, authKey strin
 	}
 
 	svcClass := ClassType{"UNCLASSIFIED"} // TODO: this will have to be updated at some point.
-	metaObj := ResMeta{ svcName, svcDesc, svcClass, "POST", svcVers, make(map[string]string) }
+	metaObj := ResMeta{ svcName, svcDesc, svcClass, svcVers, make(map[string]string) }
 	for key, val := range attributes {
 		metaObj.Metadata[key] = val
 	}
-	svcObj := Service{ svcID, svcURL, metaObj }
+	svcObj := Service{ svcID, svcURL, svcURL, "POST", metaObj }
 	svcJSON, err := json.Marshal(svcObj)
 
 	if svcID == "" {
