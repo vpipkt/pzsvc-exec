@@ -202,7 +202,7 @@ func Ingest(fName, fType, pzAddr, sourceName, version, authKey string,
 	var resp *http.Response
 
 	desc := fmt.Sprintf("%s uploaded by %s.", fType, sourceName)
-	rMeta := ResMeta{fName, desc, ClassType{"UNCLASSIFIED"}, "POST", version, make(map[string]string)} //TODO: implement classification
+	rMeta := ResMeta{fName, desc, ClassType{"UNCLASSIFIED"}, version, make(map[string]string)} //TODO: implement classification
 	for key, val := range props {
 		rMeta.Metadata[key] = val
 	}
