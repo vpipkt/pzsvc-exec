@@ -101,14 +101,15 @@ func ManageRegistration(svcName, svcDesc, svcURL, pzAddr, svcVers, authKey strin
 	for key, val := range attributes {
 		metaObj.Metadata[key] = val
 	}
-	svcObj := Service{ svcID, svcURL, svcURL, "POST", metaObj }
+	svcObj := Service{ svcID, svcURL+"/execute", svcURL+"/help", "POST", metaObj }
 	svcJSON, err := json.Marshal(svcObj)
+	fmt.Println(string(svcJSON))
 
 	if svcID == "" {
 		fmt.Println("Registering")
 		_, err = SubmitSinglePart("POST", string(svcJSON), pzAddr+"/service", authKey)
 	} else {
-		fmt.Println("Updating")
+		fmt.Println("Updating service:"+svcID)
 		_, err = SubmitSinglePart("PUT", string(svcJSON), pzAddr+"/service/"+svcID, authKey)
 	}
 	if err != nil {

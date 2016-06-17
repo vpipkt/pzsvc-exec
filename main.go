@@ -92,7 +92,7 @@ func main() {
 		fmt.Println("About to manage registration.")
 		err = pzsvc.ManageRegistration(	configObj.SvcName,
 										configObj.Description,
-										configObj.URL + "/execute",
+										configObj.URL,
 										configObj.PzAddr,
 										version,
 										authKey,
